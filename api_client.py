@@ -1,0 +1,97 @@
+import requests
+from typing import Optional
+
+BASE_URL = "http://localhost:8000"
+
+
+class APIError(Exception):
+    def __init__(self, status_code: int, detail: str):
+        self.status_code = status_code
+        self.detail = detail
+        super().__init__(f"HTTP {status_code}: {detail}")
+
+
+def _handle_response(resp: requests.Response, expected_status: int = 200):
+    if resp.status_code == expected_status:
+        if expected_status == 204:
+            return None
+        return resp.json()
+    try:
+        body = resp.json()
+        detail = body.get("detail", str(body))
+    except Exception:
+        detail = resp.text
+    raise APIError(resp.status_code, str(detail))
+
+
+# ── Sessions ─────────────────────────────────────────────────────────
+
+def create_session(
+    symbol: str,
+    timeframe: str = "1m",
+    hysteresis_k: int = 2,
+    persistence_window: int = 20,
+    persistence_threshold: int = 15,
+) -> dict:
+    payload = {
+        "symbol": symbol.upper().strip(),
+        "timeframe": timeframe,
+        "hysteresis_k": hysteresis_k,
+        "persistence_window": persistence_window,
+        "persistence_threshold": persistence_threshold,
+    }
+    resp = requests.post(f"{BASE_URL}/api/sessions/", json=payload)
+    return _handle_response(resp, 201)
+
+
+def list_sessions(
+    status: Optional[str] = None,
+    symbol: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    params: dict = {"limit": limit, "offset": offset}
+    if status:
+        params["status"] = status
+    if symbol:
+        params["symbol"] = symbol
+    resp = requests.get(f"{BASE_URL}/api/sessions/", params=params)
+    return _handle_response(resp)
+
+
+def get_session(session_id: int) -> dict:
+    resp = requests.get(f"{BASE_URL}/api/sessions/detail", params={"session_id": session_id})
+    return _handle_response(resp)
+
+
+def update_session(session_id: int, **fields) -> dict:
+    payload = {k: v for k, v in fields.items() if v is not None}
+    resp = requests.patch(f"{BASE_URL}/api/sessions/", params={"session_id": session_id}, json=payload)
+    return _handle_response(resp)
+
+
+def start_session(session_id: int) -> dict:
+    resp = requests.post(f"{BASE_URL}/api/sessions/start", params={"session_id": session_id})
+    return _handle_response(resp)
+
+
+def pause_session(session_id: int) -> dict:
+    resp = requests.post(f"{BASE_URL}/api/sessions/pause", params={"session_id": session_id})
+    return _handle_response(resp)
+
+
+def end_session(session_id: int) -> dict:
+    resp = requests.post(f"{BASE_URL}/api/sessions/end", params={"session_id": session_id})
+    return _handle_response(resp)
+
+
+def delete_session(session_id: int) -> None:
+    resp = requests.delete(f"{BASE_URL}/api/sessions/", params={"session_id": session_id})
+    return _handle_response(resp, 204)
+
+
+# ── Health ────────────────────────────────────────────────────────────
+
+def health_check() -> dict:
+    resp = requests.get(f"{BASE_URL}/health")
+    return _handle_response(resp)
