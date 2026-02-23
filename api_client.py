@@ -90,6 +90,33 @@ def delete_session(session_id: int) -> None:
     return _handle_response(resp, 204)
 
 
+# ── IBKR ──────────────────────────────────────────────────────────────
+
+def ibkr_connect() -> dict:
+    resp = requests.post(f"{BASE_URL}/api/ibkr/connect")
+    return _handle_response(resp)
+
+
+def ibkr_disconnect() -> dict:
+    resp = requests.post(f"{BASE_URL}/api/ibkr/disconnect")
+    return _handle_response(resp)
+
+
+def ibkr_status() -> dict:
+    resp = requests.get(f"{BASE_URL}/api/ibkr/status")
+    return _handle_response(resp)
+
+
+def ibkr_test_bar(symbol: str, timeframe: str = "1m", sec_type: str = "STK") -> dict:
+    params = {
+        "symbol": symbol.upper().strip(),
+        "timeframe": timeframe,
+        "sec_type": sec_type,
+    }
+    resp = requests.get(f"{BASE_URL}/api/ibkr/test-bar", params=params)
+    return _handle_response(resp)
+
+
 # ── Health ────────────────────────────────────────────────────────────
 
 def health_check() -> dict:

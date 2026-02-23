@@ -65,7 +65,7 @@ with st.sidebar:
         st.error("Backend unreachable (localhost:8000)")
 
     st.divider()
-    page = st.radio("Navigation", ["Sessions"], index=0, label_visibility="collapsed")
+    page = st.radio("Navigation", ["Sessions", "IBKR"], index=0, label_visibility="collapsed")
 
 
 # ── Sessions page ─────────────────────────────────────────────────────
@@ -273,7 +273,108 @@ def sessions_page():
                             st.rerun()
 
 
+# ── IBKR page ─────────────────────────────────────────────────────────
+
+SEC_TYPES = ["STK", "FOREX"]
+
+def ibkr_page():
+    st.header("IBKR Gateway")
+
+    # ── Connection controls ───────────────────────────────────────────
+    st.subheader("Connection")
+    conn_cols = st.columns(3)
+
+    with conn_cols[0]:
+        if st.button("Connect", use_container_width=True):
+            try:
+                result = api_client.ibkr_connect()
+                st.success(f"Connected: {result}")
+            except APIError as e:
+                st.error(f"Connect failed: {e.detail}")
+            except Exception as e:
+                st.error(f"Connection error: {e}")
+
+    with conn_cols[1]:
+        if st.button("Disconnect", use_container_width=True):
+            try:
+                result = api_client.ibkr_disconnect()
+                st.success(f"Disconnected: {result}")
+            except APIError as e:
+                st.error(f"Disconnect failed: {e.detail}")
+            except Exception as e:
+                st.error(f"Connection error: {e}")
+
+    with conn_cols[2]:
+        if st.button("Check Status", use_container_width=True):
+            try:
+                status = api_client.ibkr_status()
+                st.session_state["ibkr_status"] = status
+            except APIError as e:
+                st.error(f"Status check failed: {e.detail}")
+            except Exception as e:
+                st.error(f"Connection error: {e}")
+
+    if "ibkr_status" in st.session_state:
+        with st.container(border=True):
+            st.markdown("**Gateway Status**")
+            st.json(st.session_state["ibkr_status"])
+
+    st.divider()
+
+    # ── Test Bar ──────────────────────────────────────────────────────
+    st.subheader("Test Bar")
+
+    with st.form("test_bar_form"):
+        tb_cols = st.columns(3)
+        with tb_cols[0]:
+            tb_symbol = st.text_input("Symbol", placeholder="e.g. AAPL or EURUSD")
+        with tb_cols[1]:
+            tb_timeframe = st.selectbox("Timeframe", TIMEFRAMES, index=0)
+        with tb_cols[2]:
+            tb_sec_type = st.selectbox("Security Type", SEC_TYPES, index=0)
+
+        tb_submitted = st.form_submit_button("Fetch Test Bar", use_container_width=True)
+        if tb_submitted:
+            if not tb_symbol or not tb_symbol.strip():
+                st.error("Symbol is required.")
+            else:
+                try:
+                    bar_data = api_client.ibkr_test_bar(
+                        symbol=tb_symbol,
+                        timeframe=tb_timeframe,
+                        sec_type=tb_sec_type,
+                    )
+                    st.session_state["test_bar_result"] = bar_data
+                except APIError as e:
+                    st.error(f"Test bar failed: {e.detail}")
+                except Exception as e:
+                    st.error(f"Connection error: {e}")
+
+    if "test_bar_result" in st.session_state:
+        bar = st.session_state["test_bar_result"]
+        with st.container(border=True):
+            st.markdown(f"**{bar.get('symbol', '')}** — {bar.get('timeframe', '')} — {bar.get('date', '')}")
+
+            price_cols = st.columns(4)
+            with price_cols[0]:
+                st.metric("Open", bar.get("open"))
+            with price_cols[1]:
+                st.metric("High", bar.get("high"))
+            with price_cols[2]:
+                st.metric("Low", bar.get("low"))
+            with price_cols[3]:
+                st.metric("Close", bar.get("close"))
+
+            vol_cols = st.columns(2)
+            with vol_cols[0]:
+                st.metric("Volume", f"{bar.get('volume', 0):,}")
+            with vol_cols[1]:
+                st.metric("VWAP", bar.get("vwap"))
+
+
 # ── Router ────────────────────────────────────────────────────────────
 
 if page == "Sessions":
     sessions_page()
+elif page == "IBKR":
+    ibkr_page()
