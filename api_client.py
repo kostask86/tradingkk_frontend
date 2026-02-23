@@ -32,6 +32,7 @@ def create_session(
     hysteresis_k: int = 2,
     persistence_window: int = 20,
     persistence_threshold: int = 15,
+    swing_lookback: int = 2,
 ) -> dict:
     payload = {
         "symbol": symbol.upper().strip(),
@@ -39,6 +40,7 @@ def create_session(
         "hysteresis_k": hysteresis_k,
         "persistence_window": persistence_window,
         "persistence_threshold": persistence_threshold,
+        "swing_lookback": swing_lookback,
     }
     resp = requests.post(f"{BASE_URL}/api/sessions/", json=payload)
     return _handle_response(resp, 201)
@@ -107,13 +109,34 @@ def ibkr_status() -> dict:
     return _handle_response(resp)
 
 
-def ibkr_test_bar(symbol: str, timeframe: str = "1m", sec_type: str = "STK") -> dict:
+def ibkr_test_bar(symbol: str, timeframe: str = "1m", sec_type: str = "STK", num_bars: int = 20) -> dict:
     params = {
         "symbol": symbol.upper().strip(),
         "timeframe": timeframe,
         "sec_type": sec_type,
+        "num_bars": num_bars,
     }
     resp = requests.get(f"{BASE_URL}/api/ibkr/test-bar", params=params)
+    return _handle_response(resp)
+
+
+# ── Scalp ─────────────────────────────────────────────────────────────
+
+def detect_swings(
+    symbol: str,
+    timeframe: str = "1m",
+    sec_type: str = "STK",
+    lookback: int = 2,
+    num_bars: int = 20,
+) -> dict:
+    params = {
+        "symbol": symbol.upper().strip(),
+        "timeframe": timeframe,
+        "sec_type": sec_type,
+        "lookback": lookback,
+        "num_bars": num_bars,
+    }
+    resp = requests.get(f"{BASE_URL}/api/scalp/detect-swings", params=params)
     return _handle_response(resp)
 
 

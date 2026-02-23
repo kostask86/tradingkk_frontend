@@ -83,7 +83,11 @@ def sessions_page():
             with col2:
                 hysteresis_k = st.number_input("Hysteresis K", min_value=1, value=2, step=1)
                 persistence_window = st.number_input("Persistence Window", min_value=5, value=20, step=1)
-            persistence_threshold = st.number_input("Persistence Threshold", min_value=1, value=15, step=1)
+            bottom_col1, bottom_col2 = st.columns(2)
+            with bottom_col1:
+                persistence_threshold = st.number_input("Persistence Threshold", min_value=1, value=15, step=1)
+            with bottom_col2:
+                swing_lookback = st.number_input("Swing Lookback", min_value=1, value=2, step=1)
 
             submitted = st.form_submit_button("Create Session", use_container_width=True)
             if submitted:
@@ -97,6 +101,7 @@ def sessions_page():
                             hysteresis_k=int(hysteresis_k),
                             persistence_window=int(persistence_window),
                             persistence_threshold=int(persistence_threshold),
+                            swing_lookback=int(swing_lookback),
                         )
                         st.success(f"Session **#{new_session['id']}** created for **{new_session['symbol']}**")
                         st.rerun()
@@ -154,7 +159,7 @@ def sessions_page():
             with top_right:
                 st.markdown(f"**Status:** {status}")
 
-            detail_cols = st.columns(4)
+            detail_cols = st.columns(5)
             with detail_cols[0]:
                 st.metric("Timeframe", sess["timeframe"])
             with detail_cols[1]:
@@ -163,6 +168,8 @@ def sessions_page():
                 st.metric("Consec. Count", sess["consecutive_count"])
             with detail_cols[3]:
                 st.metric("Hysteresis K", sess["hysteresis_k"])
+            with detail_cols[4]:
+                st.metric("Swing Lookback", sess.get("swing_lookback", "—"))
 
             param_cols = st.columns(4)
             with param_cols[0]:
@@ -245,6 +252,9 @@ def sessions_page():
                         new_hk = st.number_input(
                             "Hysteresis K", min_value=1, value=sess["hysteresis_k"], key=f"hk_{sid}"
                         )
+                        new_sl = st.number_input(
+                            "Swing Lookback", min_value=1, value=sess.get("swing_lookback", 2), key=f"sl_{sid}"
+                        )
                     with ec2:
                         new_pw = st.number_input(
                             "Persistence Window", min_value=5, value=sess["persistence_window"], key=f"pw_{sid}"
@@ -262,6 +272,7 @@ def sessions_page():
                                     hysteresis_k=int(new_hk),
                                     persistence_window=int(new_pw),
                                     persistence_threshold=int(new_pt),
+                                    swing_lookback=int(new_sl),
                                 )
                                 st.session_state.pop(f"editing_{sid}", None)
                                 st.rerun()
@@ -325,13 +336,15 @@ def ibkr_page():
     st.subheader("Test Bar")
 
     with st.form("test_bar_form"):
-        tb_cols = st.columns(3)
+        tb_cols = st.columns(4)
         with tb_cols[0]:
             tb_symbol = st.text_input("Symbol", placeholder="e.g. AAPL or EURUSD")
         with tb_cols[1]:
             tb_timeframe = st.selectbox("Timeframe", TIMEFRAMES, index=0)
         with tb_cols[2]:
             tb_sec_type = st.selectbox("Security Type", SEC_TYPES, index=0)
+        with tb_cols[3]:
+            tb_num_bars = st.number_input("Num Bars", min_value=5, max_value=200, value=20, step=5)
 
         tb_submitted = st.form_submit_button("Fetch Test Bar", use_container_width=True)
         if tb_submitted:
@@ -343,6 +356,7 @@ def ibkr_page():
                         symbol=tb_symbol,
                         timeframe=tb_timeframe,
                         sec_type=tb_sec_type,
+                        num_bars=int(tb_num_bars),
                     )
                     st.session_state["test_bar_result"] = bar_data
                 except APIError as e:
@@ -351,25 +365,82 @@ def ibkr_page():
                     st.error(f"Connection error: {e}")
 
     if "test_bar_result" in st.session_state:
-        bar = st.session_state["test_bar_result"]
+        result = st.session_state["test_bar_result"]
+        bars = result if isinstance(result, list) else [result]
+
+        if not bars:
+            st.info("No bars returned.")
+        else:
+            import pandas as pd
+            df = pd.DataFrame(bars)
+            df.insert(0, "bar_index", range(len(df)))
+            display_cols = [c for c in ["bar_index", "date", "open", "high", "low", "close", "volume", "vwap"] if c in df.columns]
+            st.dataframe(df[display_cols], use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # ── Detect Swings ─────────────────────────────────────────────────
+    st.subheader("Detect Swings")
+
+    with st.form("detect_swings_form"):
+        sw_cols = st.columns(5)
+        with sw_cols[0]:
+            sw_symbol = st.text_input("Symbol", placeholder="e.g. AAPL or EURUSD", key="sw_symbol")
+        with sw_cols[1]:
+            sw_timeframe = st.selectbox("Timeframe", TIMEFRAMES, index=0, key="sw_tf")
+        with sw_cols[2]:
+            sw_sec_type = st.selectbox("Security Type", SEC_TYPES, index=0, key="sw_sec")
+        with sw_cols[3]:
+            sw_lookback = st.number_input("Lookback", min_value=1, max_value=10, value=2, step=1, key="sw_lb")
+        with sw_cols[4]:
+            sw_num_bars = st.number_input("Num Bars", min_value=5, max_value=200, value=20, step=5, key="sw_nb")
+
+        sw_submitted = st.form_submit_button("Detect Swings", use_container_width=True)
+        if sw_submitted:
+            if not sw_symbol or not sw_symbol.strip():
+                st.error("Symbol is required.")
+            else:
+                try:
+                    swing_data = api_client.detect_swings(
+                        symbol=sw_symbol,
+                        timeframe=sw_timeframe,
+                        sec_type=sw_sec_type,
+                        lookback=int(sw_lookback),
+                        num_bars=int(sw_num_bars),
+                    )
+                    st.session_state["swing_result"] = swing_data
+                except APIError as e:
+                    st.error(f"Detect swings failed: {e.detail}")
+                except Exception as e:
+                    st.error(f"Connection error: {e}")
+
+    if "swing_result" in st.session_state:
+        data = st.session_state["swing_result"]
         with st.container(border=True):
-            st.markdown(f"**{bar.get('symbol', '')}** — {bar.get('timeframe', '')} — {bar.get('date', '')}")
+            st.markdown(
+                f"**{data.get('symbol', '')}** — {data.get('timeframe', '')} "
+                f"— Lookback: {data.get('lookback', '')} — Total bars: {data.get('total_bars', '')}"
+            )
 
-            price_cols = st.columns(4)
-            with price_cols[0]:
-                st.metric("Open", bar.get("open"))
-            with price_cols[1]:
-                st.metric("High", bar.get("high"))
-            with price_cols[2]:
-                st.metric("Low", bar.get("low"))
-            with price_cols[3]:
-                st.metric("Close", bar.get("close"))
+            swings = data.get("swings", [])
+            if not swings:
+                st.info("No swing points detected.")
+            else:
+                high_swings = [s for s in swings if s["type"] == "HIGH"]
+                low_swings = [s for s in swings if s["type"] == "LOW"]
 
-            vol_cols = st.columns(2)
-            with vol_cols[0]:
-                st.metric("Volume", f"{bar.get('volume', 0):,}")
-            with vol_cols[1]:
-                st.metric("VWAP", bar.get("vwap"))
+                summary_cols = st.columns(2)
+                with summary_cols[0]:
+                    st.metric("Swing Highs", len(high_swings))
+                with summary_cols[1]:
+                    st.metric("Swing Lows", len(low_swings))
+
+                for swing in swings:
+                    swing_icon = "🔺" if swing["type"] == "HIGH" else "🔻"
+                    st.markdown(
+                        f"{swing_icon} **{swing['type']}** at bar `{swing['bar_index']}` — "
+                        f"Price: **{swing['price']}**"
+                    )
 
 
 # ── Router ────────────────────────────────────────────────────────────
