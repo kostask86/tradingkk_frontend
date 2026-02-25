@@ -116,7 +116,7 @@ def ibkr_test_bar(symbol: str, timeframe: str = "1m", sec_type: str = "STK", num
         "sec_type": sec_type,
         "num_bars": num_bars,
     }
-    resp = requests.get(f"{BASE_URL}/api/ibkr/test-bar", params=params)
+    resp = requests.get(f"{BASE_URL}/api/scalp/test-bars", params=params)
     return _handle_response(resp)
 
 

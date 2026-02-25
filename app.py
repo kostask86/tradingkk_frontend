@@ -333,7 +333,7 @@ def ibkr_page():
     st.divider()
 
     # ── Test Bar ──────────────────────────────────────────────────────
-    st.subheader("Test Bar")
+    st.subheader("Test Bars")
 
     with st.form("test_bar_form"):
         tb_cols = st.columns(4)
@@ -366,16 +366,95 @@ def ibkr_page():
 
     if "test_bar_result" in st.session_state:
         result = st.session_state["test_bar_result"]
-        bars = result if isinstance(result, list) else [result]
+
+        meta_symbol = ""
+        meta_timeframe = ""
+        meta_count = None
+
+        if isinstance(result, dict) and "bars" in result:
+            bars = result.get("bars", [])
+            meta_symbol = result.get("symbol", "")
+            meta_timeframe = result.get("timeframe", "")
+            meta_count = result.get("count")
+        elif isinstance(result, list):
+            bars = result
+        elif isinstance(result, dict):
+            bars = [result]
+        else:
+            bars = []
+
+        if meta_symbol or meta_timeframe or meta_count is not None:
+            st.caption(
+                f"Symbol: {meta_symbol or '-'} | Timeframe: {meta_timeframe or '-'} | Count: {meta_count if meta_count is not None else len(bars)}"
+            )
 
         if not bars:
             st.info("No bars returned.")
         else:
             import pandas as pd
-            df = pd.DataFrame(bars)
-            df.insert(0, "bar_index", range(len(df)))
-            display_cols = [c for c in ["bar_index", "date", "open", "high", "low", "close", "volume", "vwap"] if c in df.columns]
-            st.dataframe(df[display_cols], use_container_width=True, hide_index=True)
+            import altair as alt
+
+            indexed_bars = [{"bar_index": idx, **bar} for idx, bar in enumerate(bars)]
+            display_cols = [
+                c
+                for c in ["bar_index", "date", "open", "high", "low", "close", "sma9", "sma20", "volume", "vwap"]
+                if c in indexed_bars[0]
+            ]
+            st.dataframe(indexed_bars, column_order=display_cols, use_container_width=True, hide_index=True)
+
+            # Basic candlestick chart with optional SMA overlays.
+            df = pd.DataFrame(indexed_bars)
+            if {"date", "open", "high", "low", "close"}.issubset(df.columns):
+                for col in ["open", "high", "low", "close", "sma9", "sma20"]:
+                    if col in df.columns:
+                        df[col] = pd.to_numeric(df[col], errors="coerce")
+                df["date"] = pd.to_datetime(df["date"], errors="coerce")
+                chart_df = df.dropna(subset=["date", "open", "high", "low", "close"]).copy()
+
+                if not chart_df.empty:
+                    st.caption("Legend: Green = Up candle | Red = Down candle | Blue = SMA9 | Orange = SMA20")
+
+                    chart_df["candle_low"] = chart_df[["open", "close"]].min(axis=1)
+                    chart_df["candle_high"] = chart_df[["open", "close"]].max(axis=1)
+                    chart_df["candle_color"] = chart_df.apply(
+                        lambda row: "#2ca02c" if row["close"] >= row["open"] else "#d62728", axis=1
+                    )
+
+                    price_scale = alt.Scale(zero=False)
+
+                    wick = alt.Chart(chart_df).mark_rule().encode(
+                        x=alt.X("date:T", title="Time"),
+                        y=alt.Y("low:Q", title="Price", scale=price_scale),
+                        y2="high:Q",
+                        color=alt.value("#9aa0a6"),
+                    )
+
+                    candle = alt.Chart(chart_df).mark_bar(size=8).encode(
+                        x=alt.X("date:T"),
+                        y=alt.Y("candle_low:Q", scale=price_scale),
+                        y2="candle_high:Q",
+                        color=alt.Color("candle_color:N", scale=None, legend=None),
+                    )
+
+                    chart = wick + candle
+
+                    if "sma9" in chart_df.columns and chart_df["sma9"].notna().any():
+                        sma9_line = alt.Chart(chart_df).mark_line(color="#1f77b4", strokeWidth=2).encode(
+                            x="date:T",
+                            y=alt.Y("sma9:Q", scale=price_scale),
+                        )
+                        chart = chart + sma9_line
+
+                    if "sma20" in chart_df.columns and chart_df["sma20"].notna().any():
+                        sma20_line = alt.Chart(chart_df).mark_line(color="#ff7f0e", strokeWidth=2).encode(
+                            x="date:T",
+                            y=alt.Y("sma20:Q", scale=price_scale),
+                        )
+                        chart = chart + sma20_line
+
+                    st.altair_chart(chart.properties(height=380), use_container_width=True)
+                else:
+                    st.info("Bars returned, but date/price values are not chartable.")
 
     st.divider()
 
@@ -409,6 +488,16 @@ def ibkr_page():
                         num_bars=int(sw_num_bars),
                     )
                     st.session_state["swing_result"] = swing_data
+                    try:
+                        swing_bars_data = api_client.ibkr_test_bar(
+                            symbol=sw_symbol,
+                            timeframe=sw_timeframe,
+                            sec_type=sw_sec_type,
+                            num_bars=int(sw_num_bars),
+                        )
+                        st.session_state["swing_bars_result"] = swing_bars_data
+                    except APIError as e:
+                        st.warning(f"Swings detected, but bars could not be fetched for chart: {e.detail}")
                 except APIError as e:
                     st.error(f"Detect swings failed: {e.detail}")
                 except Exception as e:
@@ -441,6 +530,95 @@ def ibkr_page():
                         f"{swing_icon} **{swing['type']}** at bar `{swing['bar_index']}` — "
                         f"Price: **{swing['price']}**"
                     )
+
+            bars_result = st.session_state.get("swing_bars_result")
+            bars = bars_result.get("bars", []) if isinstance(bars_result, dict) else []
+
+            if bars:
+                import pandas as pd
+                import altair as alt
+
+                bars_df = pd.DataFrame([{"bar_index": idx, **bar} for idx, bar in enumerate(bars)])
+                if {"date", "open", "high", "low", "close", "bar_index"}.issubset(bars_df.columns):
+                    for col in ["open", "high", "low", "close", "sma9", "sma20"]:
+                        if col in bars_df.columns:
+                            bars_df[col] = pd.to_numeric(bars_df[col], errors="coerce")
+                    bars_df["date"] = pd.to_datetime(bars_df["date"], errors="coerce")
+                    chart_df = bars_df.dropna(subset=["date", "open", "high", "low", "close"]).copy()
+
+                    if not chart_df.empty:
+                        chart_df["candle_low"] = chart_df[["open", "close"]].min(axis=1)
+                        chart_df["candle_high"] = chart_df[["open", "close"]].max(axis=1)
+                        chart_df["candle_color"] = chart_df.apply(
+                            lambda row: "#2ca02c" if row["close"] >= row["open"] else "#d62728", axis=1
+                        )
+
+                        price_scale = alt.Scale(zero=False)
+
+                        wick = alt.Chart(chart_df).mark_rule().encode(
+                            x=alt.X("date:T", title="Time"),
+                            y=alt.Y("low:Q", title="Price", scale=price_scale),
+                            y2="high:Q",
+                            color=alt.value("#9aa0a6"),
+                        )
+
+                        candle = alt.Chart(chart_df).mark_bar(size=8).encode(
+                            x=alt.X("date:T"),
+                            y=alt.Y("candle_low:Q", scale=price_scale),
+                            y2="candle_high:Q",
+                            color=alt.Color("candle_color:N", scale=None, legend=None),
+                        )
+
+                        chart = wick + candle
+
+                        if "sma9" in chart_df.columns and chart_df["sma9"].notna().any():
+                            chart = chart + alt.Chart(chart_df).mark_line(color="#1f77b4", strokeWidth=2).encode(
+                                x="date:T",
+                                y=alt.Y("sma9:Q", scale=price_scale),
+                            )
+                        if "sma20" in chart_df.columns and chart_df["sma20"].notna().any():
+                            chart = chart + alt.Chart(chart_df).mark_line(color="#ff7f0e", strokeWidth=2).encode(
+                                x="date:T",
+                                y=alt.Y("sma20:Q", scale=price_scale),
+                            )
+
+                        swings_df = pd.DataFrame(swings)
+                        if {"bar_index", "type", "price"}.issubset(swings_df.columns):
+                            swings_df["bar_index"] = pd.to_numeric(swings_df["bar_index"], errors="coerce")
+                            swings_df["price"] = pd.to_numeric(swings_df["price"], errors="coerce")
+                            swings_df = swings_df.dropna(subset=["bar_index", "price"]).copy()
+                            swings_df["bar_index"] = swings_df["bar_index"].astype(int)
+                            marker_df = swings_df.merge(chart_df[["bar_index", "date"]], on="bar_index", how="left")
+                            marker_df = marker_df.dropna(subset=["date", "price"])
+
+                            if not marker_df.empty:
+                                markers = alt.Chart(marker_df).mark_point(
+                                    filled=True,
+                                    size=320,
+                                    stroke="black",
+                                    strokeWidth=1.8,
+                                    opacity=0.95,
+                                ).encode(
+                                    x="date:T",
+                                    y=alt.Y("price:Q", scale=price_scale),
+                                    color=alt.Color(
+                                        "type:N",
+                                        scale=alt.Scale(domain=["HIGH", "LOW"], range=["#ff0033", "#00b4ff"]),
+                                        legend=alt.Legend(title="Swing Type"),
+                                    ),
+                                    shape=alt.Shape(
+                                        "type:N",
+                                        scale=alt.Scale(domain=["HIGH", "LOW"], range=["triangle-up", "triangle-down"]),
+                                        legend=None,
+                                    ),
+                                    tooltip=["type:N", "bar_index:Q", "price:Q", "date:T"],
+                                )
+                                chart = chart + markers
+
+                        st.caption(
+                            "Legend: Green = Up candle | Red = Down candle | Blue = SMA9 | Orange = SMA20 | Markers = Swings"
+                        )
+                        st.altair_chart(chart.properties(height=380), use_container_width=True)
 
 
 # ── Router ────────────────────────────────────────────────────────────
