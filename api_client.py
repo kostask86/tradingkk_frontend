@@ -127,16 +127,34 @@ def detect_swings(
     timeframe: str = "1m",
     sec_type: str = "STK",
     lookback: int = 2,
-    num_bars: int = 20,
 ) -> dict:
     params = {
         "symbol": symbol.upper().strip(),
         "timeframe": timeframe,
         "sec_type": sec_type,
         "lookback": lookback,
-        "num_bars": num_bars,
     }
     resp = requests.get(f"{BASE_URL}/api/scalp/detect-swings", params=params)
+    return _handle_response(resp)
+
+
+def calculate_candidate_bias(
+    symbol: str,
+    timeframe: str = "1m",
+    sec_type: str = "STK",
+    lookback: int = 2,
+    persistence_window: int = 20,
+    persistence_threshold: int = 15,
+) -> dict:
+    params = {
+        "symbol": symbol.upper().strip(),
+        "timeframe": timeframe,
+        "sec_type": sec_type,
+        "lookback": lookback,
+        "persistence_window": persistence_window,
+        "persistence_threshold": persistence_threshold,
+    }
+    resp = requests.get(f"{BASE_URL}/api/scalp/calculate-candidate-bias", params=params)
     return _handle_response(resp)
 
 

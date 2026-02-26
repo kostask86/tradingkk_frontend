@@ -163,13 +163,14 @@ def sessions_page():
             with detail_cols[0]:
                 st.metric("Timeframe", sess["timeframe"])
             with detail_cols[1]:
-                st.metric("Bias", sess["current_bias"])
+                state_bias = sess.get("state_bias", sess.get("current_bias", "NEUTRAL"))
+                st.metric("State Bias", state_bias)
             with detail_cols[2]:
-                st.metric("Consec. Count", sess["consecutive_count"])
+                st.metric("Candidate Bias", sess.get("candidate_bias", "NEUTRAL"))
             with detail_cols[3]:
-                st.metric("Hysteresis K", sess["hysteresis_k"])
+                st.metric("Consec. Count", sess["consecutive_count"])
             with detail_cols[4]:
-                st.metric("Swing Lookback", sess.get("swing_lookback", "—"))
+                st.metric("Hysteresis K", sess["hysteresis_k"])
 
             param_cols = st.columns(4)
             with param_cols[0]:
@@ -462,7 +463,7 @@ def ibkr_page():
     st.subheader("Detect Swings")
 
     with st.form("detect_swings_form"):
-        sw_cols = st.columns(5)
+        sw_cols = st.columns(4)
         with sw_cols[0]:
             sw_symbol = st.text_input("Symbol", placeholder="e.g. AAPL or EURUSD", key="sw_symbol")
         with sw_cols[1]:
@@ -471,8 +472,6 @@ def ibkr_page():
             sw_sec_type = st.selectbox("Security Type", SEC_TYPES, index=0, key="sw_sec")
         with sw_cols[3]:
             sw_lookback = st.number_input("Lookback", min_value=1, max_value=10, value=2, step=1, key="sw_lb")
-        with sw_cols[4]:
-            sw_num_bars = st.number_input("Num Bars", min_value=5, max_value=200, value=20, step=5, key="sw_nb")
 
         sw_submitted = st.form_submit_button("Detect Swings", use_container_width=True)
         if sw_submitted:
@@ -485,15 +484,16 @@ def ibkr_page():
                         timeframe=sw_timeframe,
                         sec_type=sw_sec_type,
                         lookback=int(sw_lookback),
-                        num_bars=int(sw_num_bars),
                     )
                     st.session_state["swing_result"] = swing_data
                     try:
+                        chart_bars = int(swing_data.get("total_bars", 20))
+                        chart_bars = max(1, min(200, chart_bars))
                         swing_bars_data = api_client.ibkr_test_bar(
                             symbol=sw_symbol,
                             timeframe=sw_timeframe,
                             sec_type=sw_sec_type,
-                            num_bars=int(sw_num_bars),
+                            num_bars=chart_bars,
                         )
                         st.session_state["swing_bars_result"] = swing_bars_data
                     except APIError as e:
@@ -510,8 +510,18 @@ def ibkr_page():
                 f"**{data.get('symbol', '')}** — {data.get('timeframe', '')} "
                 f"— Lookback: {data.get('lookback', '')} — Total bars: {data.get('total_bars', '')}"
             )
+            st.caption(f"Enough swings: {data.get('enough_swings', False)} | Message: {data.get('message', '')}")
 
-            swings = data.get("swings", [])
+            swings = [
+                s
+                for s in [
+                    data.get("previous_last_high_swing"),
+                    data.get("last_high_swing"),
+                    data.get("previous_last_low_swing"),
+                    data.get("last_low_swing"),
+                ]
+                if s is not None
+            ]
             if not swings:
                 st.info("No swing points detected.")
             else:
@@ -619,6 +629,177 @@ def ibkr_page():
                             "Legend: Green = Up candle | Red = Down candle | Blue = SMA9 | Orange = SMA20 | Markers = Swings"
                         )
                         st.altair_chart(chart.properties(height=380), use_container_width=True)
+
+    st.divider()
+
+    # ── Calculate Candidate Bias ──────────────────────────────────────
+    st.subheader("Calculate Candidate Bias")
+
+    with st.form("calculate_candidate_bias_form"):
+        cb_cols = st.columns(6)
+        with cb_cols[0]:
+            cb_symbol = st.text_input("Symbol", placeholder="e.g. AAPL or EURUSD", key="cb_symbol")
+        with cb_cols[1]:
+            cb_timeframe = st.selectbox("Timeframe", TIMEFRAMES, index=0, key="cb_tf")
+        with cb_cols[2]:
+            cb_sec_type = st.selectbox("Security Type", SEC_TYPES, index=0, key="cb_sec")
+        with cb_cols[3]:
+            cb_lookback = st.number_input("Lookback", min_value=1, max_value=10, value=2, step=1, key="cb_lb")
+        with cb_cols[4]:
+            cb_pw = st.number_input(
+                "Persistence Window", min_value=5, max_value=200, value=20, step=1, key="cb_pw"
+            )
+        with cb_cols[5]:
+            cb_pt = st.number_input(
+                "Persistence Threshold", min_value=1, max_value=200, value=15, step=1, key="cb_pt"
+            )
+
+        cb_submitted = st.form_submit_button("Calculate Candidate Bias", use_container_width=True)
+        if cb_submitted:
+            if not cb_symbol or not cb_symbol.strip():
+                st.error("Symbol is required.")
+            else:
+                try:
+                    cb_result = api_client.calculate_candidate_bias(
+                        symbol=cb_symbol,
+                        timeframe=cb_timeframe,
+                        sec_type=cb_sec_type,
+                        lookback=int(cb_lookback),
+                        persistence_window=int(cb_pw),
+                        persistence_threshold=int(cb_pt),
+                    )
+                    st.session_state["candidate_bias_result"] = cb_result
+                except APIError as e:
+                    st.error(f"Calculate candidate bias failed: {e.detail}")
+                except Exception as e:
+                    st.error(f"Connection error: {e}")
+
+    if "candidate_bias_result" in st.session_state:
+        cb_data = st.session_state["candidate_bias_result"]
+        with st.container(border=True):
+            st.markdown(
+                f"**{cb_data.get('symbol', '')}** — {cb_data.get('timeframe', '')} "
+                f"— Lookback: {cb_data.get('lookback', '')} — Total bars: {cb_data.get('total_bars', '')}"
+            )
+            st.caption(
+                f"Can calculate bias: {cb_data.get('can_calculate_bias', False)}"
+                + (f" | Reason: {cb_data.get('reason')}" if cb_data.get("reason") else "")
+            )
+
+            bias_cols = st.columns(4)
+            with bias_cols[0]:
+                st.metric("MA Bar Bias", cb_data.get("ma_bar_bias", "NEUTRAL"))
+            with bias_cols[1]:
+                st.metric("MA Persistent Bias", cb_data.get("ma_persistent_bias", "NEUTRAL"))
+            with bias_cols[2]:
+                st.metric("Structure Bias", cb_data.get("structure_bias", "NEUTRAL"))
+            with bias_cols[3]:
+                st.metric("Candidate Bias", cb_data.get("candidate_bias", "NEUTRAL"))
+
+            count_cols = st.columns(2)
+            with count_cols[0]:
+                st.metric("Bull Count", cb_data.get("bull_count", 0))
+            with count_cols[1]:
+                st.metric("Bear Count", cb_data.get("bear_count", 0))
+
+            bars = cb_data.get("bars", [])
+            swings = cb_data.get("swings", [])
+
+            if bars:
+                import pandas as pd
+                import altair as alt
+
+                bars_df = pd.DataFrame([{"bar_index": idx, **bar} for idx, bar in enumerate(bars)])
+                display_cols = [
+                    c
+                    for c in ["bar_index", "date", "open", "high", "low", "close", "sma9", "sma20"]
+                    if c in bars_df.columns
+                ]
+                st.dataframe(bars_df, column_order=display_cols, use_container_width=True, hide_index=True)
+
+                if {"date", "open", "high", "low", "close", "bar_index"}.issubset(bars_df.columns):
+                    for col in ["open", "high", "low", "close", "sma9", "sma20"]:
+                        if col in bars_df.columns:
+                            bars_df[col] = pd.to_numeric(bars_df[col], errors="coerce")
+                    bars_df["date"] = pd.to_datetime(bars_df["date"], errors="coerce")
+                    chart_df = bars_df.dropna(subset=["date", "open", "high", "low", "close"]).copy()
+
+                    if not chart_df.empty:
+                        chart_df["candle_low"] = chart_df[["open", "close"]].min(axis=1)
+                        chart_df["candle_high"] = chart_df[["open", "close"]].max(axis=1)
+                        chart_df["candle_color"] = chart_df.apply(
+                            lambda row: "#2ca02c" if row["close"] >= row["open"] else "#d62728", axis=1
+                        )
+
+                        price_scale = alt.Scale(zero=False)
+
+                        wick = alt.Chart(chart_df).mark_rule().encode(
+                            x=alt.X("date:T", title="Time"),
+                            y=alt.Y("low:Q", title="Price", scale=price_scale),
+                            y2="high:Q",
+                            color=alt.value("#9aa0a6"),
+                        )
+
+                        candle = alt.Chart(chart_df).mark_bar(size=8).encode(
+                            x=alt.X("date:T"),
+                            y=alt.Y("candle_low:Q", scale=price_scale),
+                            y2="candle_high:Q",
+                            color=alt.Color("candle_color:N", scale=None, legend=None),
+                        )
+
+                        chart = wick + candle
+
+                        if "sma9" in chart_df.columns and chart_df["sma9"].notna().any():
+                            chart = chart + alt.Chart(chart_df).mark_line(color="#1f77b4", strokeWidth=2).encode(
+                                x="date:T",
+                                y=alt.Y("sma9:Q", scale=price_scale),
+                            )
+                        if "sma20" in chart_df.columns and chart_df["sma20"].notna().any():
+                            chart = chart + alt.Chart(chart_df).mark_line(color="#ff7f0e", strokeWidth=2).encode(
+                                x="date:T",
+                                y=alt.Y("sma20:Q", scale=price_scale),
+                            )
+
+                        swings_df = pd.DataFrame(swings)
+                        if {"bar_index", "type", "price"}.issubset(swings_df.columns):
+                            swings_df["bar_index"] = pd.to_numeric(swings_df["bar_index"], errors="coerce")
+                            swings_df["price"] = pd.to_numeric(swings_df["price"], errors="coerce")
+                            swings_df = swings_df.dropna(subset=["bar_index", "price"]).copy()
+                            swings_df["bar_index"] = swings_df["bar_index"].astype(int)
+                            marker_df = swings_df.merge(chart_df[["bar_index", "date"]], on="bar_index", how="left")
+                            marker_df = marker_df.dropna(subset=["date", "price"])
+
+                            if not marker_df.empty:
+                                markers = alt.Chart(marker_df).mark_point(
+                                    filled=True,
+                                    size=320,
+                                    stroke="black",
+                                    strokeWidth=1.8,
+                                    opacity=0.95,
+                                ).encode(
+                                    x="date:T",
+                                    y=alt.Y("price:Q", scale=price_scale),
+                                    color=alt.Color(
+                                        "type:N",
+                                        scale=alt.Scale(domain=["HIGH", "LOW"], range=["#ff0033", "#00b4ff"]),
+                                        legend=alt.Legend(title="Swing Type"),
+                                    ),
+                                    shape=alt.Shape(
+                                        "type:N",
+                                        scale=alt.Scale(domain=["HIGH", "LOW"], range=["triangle-up", "triangle-down"]),
+                                        legend=None,
+                                    ),
+                                    tooltip=["type:N", "bar_index:Q", "price:Q", "date:T"],
+                                )
+                                chart = chart + markers
+
+                        st.caption(
+                            "Legend: Green = Up candle | Red = Down candle | Blue = SMA9 | Orange = SMA20 | Markers = Swings"
+                        )
+                        st.altair_chart(chart.properties(height=420), use_container_width=True)
+
+            with st.expander("View raw response"):
+                st.json(cb_data)
 
 
 # ── Router ────────────────────────────────────────────────────────────
