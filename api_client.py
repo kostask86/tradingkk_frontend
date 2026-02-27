@@ -92,6 +92,32 @@ def delete_session(session_id: int) -> None:
     return _handle_response(resp, 204)
 
 
+# ── Bias Calculations ────────────────────────────────────────────────
+
+def get_bias_calculation(bias_calculation_id: int) -> dict:
+    resp = requests.get(
+        f"{BASE_URL}/api/bias-calculations/detail",
+        params={"bias_calculation_id": bias_calculation_id},
+    )
+    return _handle_response(resp)
+
+
+def list_bias_calculations(session_id: int, limit: int = 100, offset: int = 0) -> list[dict]:
+    resp = requests.get(
+        f"{BASE_URL}/api/bias-calculations/",
+        params={"session_id": session_id, "limit": limit, "offset": offset},
+    )
+    return _handle_response(resp)
+
+
+def delete_bias_calculation(bias_calculation_id: int) -> None:
+    resp = requests.delete(
+        f"{BASE_URL}/api/bias-calculations/",
+        params={"bias_calculation_id": bias_calculation_id},
+    )
+    return _handle_response(resp, 204)
+
+
 # ── IBKR ──────────────────────────────────────────────────────────────
 
 def ibkr_connect() -> dict:

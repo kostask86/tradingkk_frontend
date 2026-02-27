@@ -49,6 +49,17 @@ def _fmt_dt(val: str | None) -> str:
         return str(val)
 
 
+def _bias_colored_html(value: str | None) -> str:
+    bias = (value or "NEUTRAL").upper()
+    color_map = {
+        "BULLISH": "#2ca02c",
+        "BEARISH": "#d62728",
+        "NEUTRAL": "#9aa0a6",
+    }
+    color = color_map.get(bias, "#9aa0a6")
+    return f"<span style='color: {color}; font-weight: 700;'>{bias}</span>"
+
+
 # ── Sidebar ───────────────────────────────────────────────────────────
 
 with st.sidebar:
@@ -72,6 +83,97 @@ with st.sidebar:
 
 def sessions_page():
     st.header("Sessions")
+    sessions_tab, bias_tab = st.tabs(["Sessions", "Bias Calculations"])
+
+    with sessions_tab:
+        st.caption("Session controls are shown below.")
+
+    with bias_tab:
+        st.subheader("Bias Calculations")
+        list_cols = st.columns(4)
+        with list_cols[0]:
+            bc_session_id = st.number_input("Session ID", min_value=1, value=1, step=1, key="bc_session_id")
+        with list_cols[1]:
+            bc_limit = st.number_input("Limit", min_value=1, max_value=1000, value=100, step=10, key="bc_limit")
+        with list_cols[2]:
+            bc_offset = st.number_input("Offset", min_value=0, value=0, step=10, key="bc_offset")
+        with list_cols[3]:
+            st.write("")
+            if st.button("Get All", use_container_width=True, key="bc_get_all"):
+                try:
+                    st.session_state["bias_calculations_list"] = api_client.list_bias_calculations(
+                        session_id=int(bc_session_id),
+                        limit=int(bc_limit),
+                        offset=int(bc_offset),
+                    )
+                    st.success("Loaded bias calculations.")
+                except APIError as e:
+                    st.error(f"Failed to list bias calculations: {e.detail}")
+                except Exception as e:
+                    st.error(f"Connection error: {e}")
+
+        action_cols = st.columns(2)
+        with action_cols[0]:
+            detail_id = st.number_input(
+                "Bias Calculation ID (Get One)", min_value=1, value=1, step=1, key="bc_detail_id"
+            )
+            if st.button("Get One", use_container_width=True, key="bc_get_one"):
+                try:
+                    st.session_state["bias_calculation_detail"] = api_client.get_bias_calculation(int(detail_id))
+                except APIError as e:
+                    st.error(f"Failed to get bias calculation: {e.detail}")
+                except Exception as e:
+                    st.error(f"Connection error: {e}")
+
+        with action_cols[1]:
+            delete_id = st.number_input(
+                "Bias Calculation ID (Delete One)", min_value=1, value=1, step=1, key="bc_delete_id"
+            )
+            if st.button("Delete One", use_container_width=True, key="bc_delete_one", type="primary"):
+                try:
+                    api_client.delete_bias_calculation(int(delete_id))
+                    st.success(f"Deleted bias calculation #{int(delete_id)}")
+                    st.session_state.pop("bias_calculation_detail", None)
+                    if "bias_calculations_list" in st.session_state:
+                        st.session_state["bias_calculations_list"] = [
+                            row
+                            for row in st.session_state["bias_calculations_list"]
+                            if int(row.get("id", -1)) != int(delete_id)
+                        ]
+                except APIError as e:
+                    st.error(f"Failed to delete bias calculation: {e.detail}")
+                except Exception as e:
+                    st.error(f"Connection error: {e}")
+
+        if "bias_calculations_list" in st.session_state:
+            st.markdown("**Session Bias Calculations**")
+            st.dataframe(st.session_state["bias_calculations_list"], use_container_width=True, hide_index=True)
+
+        if "bias_calculation_detail" in st.session_state:
+            detail = st.session_state["bias_calculation_detail"]
+            st.markdown("**Bias Calculation Detail**")
+            bias_cols = st.columns(4)
+            with bias_cols[0]:
+                st.markdown(
+                    f"**MA Bar Bias**<br>{_bias_colored_html(detail.get('ma_bar_bias', 'NEUTRAL'))}",
+                    unsafe_allow_html=True,
+                )
+            with bias_cols[1]:
+                st.markdown(
+                    f"**MA Persistent Bias**<br>{_bias_colored_html(detail.get('ma_persistent_bias', 'NEUTRAL'))}",
+                    unsafe_allow_html=True,
+                )
+            with bias_cols[2]:
+                st.markdown(
+                    f"**Structure Bias**<br>{_bias_colored_html(detail.get('structure_bias', 'NEUTRAL'))}",
+                    unsafe_allow_html=True,
+                )
+            with bias_cols[3]:
+                st.markdown(
+                    f"**Candidate Bias**<br>{_bias_colored_html(detail.get('candidate_bias', 'NEUTRAL'))}",
+                    unsafe_allow_html=True,
+                )
+            st.json(detail)
 
     # ── Create session form ───────────────────────────────────────────
     with st.expander("➕ Create new session", expanded=False):
@@ -164,9 +266,12 @@ def sessions_page():
                 st.metric("Timeframe", sess["timeframe"])
             with detail_cols[1]:
                 state_bias = sess.get("state_bias", sess.get("current_bias", "NEUTRAL"))
-                st.metric("State Bias", state_bias)
+                st.markdown(f"**State Bias**<br>{_bias_colored_html(state_bias)}", unsafe_allow_html=True)
             with detail_cols[2]:
-                st.metric("Candidate Bias", sess.get("candidate_bias", "NEUTRAL"))
+                st.markdown(
+                    f"**Candidate Bias**<br>{_bias_colored_html(sess.get('candidate_bias', 'NEUTRAL'))}",
+                    unsafe_allow_html=True,
+                )
             with detail_cols[3]:
                 st.metric("Consec. Count", sess["consecutive_count"])
             with detail_cols[4]:
@@ -688,13 +793,25 @@ def ibkr_page():
 
             bias_cols = st.columns(4)
             with bias_cols[0]:
-                st.metric("MA Bar Bias", cb_data.get("ma_bar_bias", "NEUTRAL"))
+                st.markdown(
+                    f"**MA Bar Bias**<br>{_bias_colored_html(cb_data.get('ma_bar_bias', 'NEUTRAL'))}",
+                    unsafe_allow_html=True,
+                )
             with bias_cols[1]:
-                st.metric("MA Persistent Bias", cb_data.get("ma_persistent_bias", "NEUTRAL"))
+                st.markdown(
+                    f"**MA Persistent Bias**<br>{_bias_colored_html(cb_data.get('ma_persistent_bias', 'NEUTRAL'))}",
+                    unsafe_allow_html=True,
+                )
             with bias_cols[2]:
-                st.metric("Structure Bias", cb_data.get("structure_bias", "NEUTRAL"))
+                st.markdown(
+                    f"**Structure Bias**<br>{_bias_colored_html(cb_data.get('structure_bias', 'NEUTRAL'))}",
+                    unsafe_allow_html=True,
+                )
             with bias_cols[3]:
-                st.metric("Candidate Bias", cb_data.get("candidate_bias", "NEUTRAL"))
+                st.markdown(
+                    f"**Candidate Bias**<br>{_bias_colored_html(cb_data.get('candidate_bias', 'NEUTRAL'))}",
+                    unsafe_allow_html=True,
+                )
 
             count_cols = st.columns(2)
             with count_cols[0]:
