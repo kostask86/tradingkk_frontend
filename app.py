@@ -1,7 +1,7 @@
 import streamlit as st
 import api_client
 from api_client import APIError
-from datetime import datetime
+from datetime import datetime, timezone
 
 TIMEFRAMES = ["1m", "15m", "30m", "1h", "4h"]
 STATUS_COLORS = {
@@ -60,6 +60,33 @@ def _bias_colored_html(value: str | None) -> str:
     return f"<span style='color: {color}; font-weight: 700;'>{bias}</span>"
 
 
+def _parse_dt(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
+def _elapsed_seconds_from_started(started_at: str | None) -> int | None:
+    start_dt = _parse_dt(started_at)
+    if not start_dt:
+        return None
+    return max(0, int((datetime.now(start_dt.tzinfo) - start_dt).total_seconds()))
+
+
+def _format_hms(total_seconds: int) -> str:
+    total_seconds = max(0, int(total_seconds))
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
 # ── Sidebar ───────────────────────────────────────────────────────────
 
 with st.sidebar:
@@ -86,7 +113,37 @@ def sessions_page():
     sessions_tab, bias_tab = st.tabs(["Sessions", "Bias Calculations"])
 
     with sessions_tab:
-        st.caption("Session controls are shown below.")
+        left_col, right_col = st.columns([3, 1])
+        with left_col:
+            st.caption("Session controls are shown below.")
+        with right_col:
+            with st.container(border=True):
+                st.markdown("##### 🕒 Session Clock")
+                try:
+                    clock_sessions = api_client.list_sessions(limit=200, offset=0)
+                except Exception:
+                    clock_sessions = []
+
+                clock_candidates = [s for s in clock_sessions if s.get("status") in ("ACTIVE", "PAUSED")]
+                if not clock_candidates:
+                    st.info("No active/paused session.")
+                else:
+                    labels = [f"#{s['id']} {s['symbol']} ({s['status']})" for s in clock_candidates]
+                    selected_label = st.selectbox("Session", labels, key="session_clock_select")
+                    selected = clock_candidates[labels.index(selected_label)]
+                    sid = selected["id"]
+                    status = selected.get("status", "PAUSED")
+
+                    if status == "PAUSED" and f"paused_elapsed_{sid}" in st.session_state:
+                        elapsed = int(st.session_state[f"paused_elapsed_{sid}"])
+                    else:
+                        elapsed = _elapsed_seconds_from_started(selected.get("started_at")) or 0
+
+                    st.metric("Elapsed", _format_hms(elapsed))
+                    if status == "PAUSED":
+                        st.caption("Paused clock (frozen at pause)")
+                    elif status == "ACTIVE":
+                        st.caption("Running from latest start/restart")
 
     with bias_tab:
         st.subheader("Bias Calculations")
@@ -146,8 +203,35 @@ def sessions_page():
                     st.error(f"Connection error: {e}")
 
         if "bias_calculations_list" in st.session_state:
-            st.markdown("**Session Bias Calculations**")
-            st.dataframe(st.session_state["bias_calculations_list"], use_container_width=True, hide_index=True)
+            with st.container(border=True):
+                st.markdown("**Session Bias Calculations**")
+                import pandas as pd
+
+                df = pd.DataFrame(st.session_state["bias_calculations_list"])
+                if "calculated_at" in df.columns:
+                    df["calculated_at"] = df["calculated_at"].apply(_fmt_dt)
+
+                bias_columns = [
+                    col
+                    for col in ["ma_bar_bias", "ma_persistent_bias", "structure_bias", "candidate_bias", "state_bias"]
+                    if col in df.columns
+                ]
+
+                def _bias_style(value):
+                    bias = str(value).upper()
+                    if bias == "BULLISH":
+                        return "color: #2ca02c; font-weight: 700;"
+                    if bias == "BEARISH":
+                        return "color: #d62728; font-weight: 700;"
+                    if bias == "NEUTRAL":
+                        return "color: #9aa0a6; font-weight: 700;"
+                    return ""
+
+                styled_df = df.style
+                if bias_columns:
+                    styled_df = styled_df.map(_bias_style, subset=bias_columns)
+
+                st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
         if "bias_calculation_detail" in st.session_state:
             detail = st.session_state["bias_calculation_detail"]
@@ -295,6 +379,7 @@ def sessions_page():
                     if st.button("▶ Start", key=f"start_{sid}", use_container_width=True):
                         try:
                             api_client.start_session(sid)
+                            st.session_state.pop(f"paused_elapsed_{sid}", None)
                             st.rerun()
                         except APIError as e:
                             st.error(e.detail)
@@ -303,7 +388,10 @@ def sessions_page():
                 if status == "ACTIVE":
                     if st.button("⏸ Pause", key=f"pause_{sid}", use_container_width=True):
                         try:
-                            api_client.pause_session(sid)
+                            paused_session = api_client.pause_session(sid)
+                            elapsed = _elapsed_seconds_from_started(paused_session.get("started_at", sess.get("started_at")))
+                            if elapsed is not None:
+                                st.session_state[f"paused_elapsed_{sid}"] = elapsed
                             st.rerun()
                         except APIError as e:
                             st.error(e.detail)
@@ -313,6 +401,7 @@ def sessions_page():
                     if st.button("⏹ End", key=f"end_{sid}", use_container_width=True):
                         try:
                             api_client.end_session(sid)
+                            st.session_state.pop(f"paused_elapsed_{sid}", None)
                             st.rerun()
                         except APIError as e:
                             st.error(e.detail)
