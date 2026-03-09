@@ -4,6 +4,8 @@ from api_client import APIError
 from datetime import datetime, timezone
 
 TIMEFRAMES = ["1m", "15m", "30m", "1h", "4h"]
+ALERT_STATUSES = ["OPEN", "CANCELLED", "FILLED", "EXPIRED"]
+ALERT_DIRECTIONS = ["LONG", "SHORT"]
 STATUS_COLORS = {
     "ACTIVE": "🟢",
     "PAUSED": "🟡",
@@ -110,7 +112,7 @@ with st.sidebar:
 
 def sessions_page():
     st.header("Sessions")
-    sessions_tab, bias_tab = st.tabs(["Sessions", "Bias Calculations"])
+    sessions_tab, bias_tab, alerts_tab = st.tabs(["Sessions", "Bias Calculations", "Alerts"])
 
     with sessions_tab:
         left_col, right_col = st.columns([3, 1])
@@ -147,23 +149,27 @@ def sessions_page():
 
     with bias_tab:
         st.subheader("Bias Calculations")
-        list_cols = st.columns(4)
+        list_cols = st.columns(3)
         with list_cols[0]:
-            bc_session_id = st.number_input("Session ID", min_value=1, value=1, step=1, key="bc_session_id")
-        with list_cols[1]:
             bc_limit = st.number_input("Limit", min_value=1, max_value=1000, value=100, step=10, key="bc_limit")
-        with list_cols[2]:
+        with list_cols[1]:
             bc_offset = st.number_input("Offset", min_value=0, value=0, step=10, key="bc_offset")
-        with list_cols[3]:
+        with list_cols[2]:
             st.write("")
             if st.button("Get All", use_container_width=True, key="bc_get_all"):
                 try:
-                    st.session_state["bias_calculations_list"] = api_client.list_bias_calculations(
-                        session_id=int(bc_session_id),
-                        limit=int(bc_limit),
-                        offset=int(bc_offset),
-                    )
-                    st.success("Loaded bias calculations.")
+                    sessions_for_bias = api_client.list_sessions(limit=500, offset=0)
+                    all_bias_calculations = []
+                    for session_row in sessions_for_bias:
+                        session_id = int(session_row["id"])
+                        session_bias = api_client.list_bias_calculations(
+                            session_id=session_id,
+                            limit=int(bc_limit),
+                            offset=int(bc_offset),
+                        )
+                        all_bias_calculations.extend(session_bias)
+                    st.session_state["bias_calculations_list"] = all_bias_calculations
+                    st.success(f"Loaded {len(all_bias_calculations)} bias calculation(s).")
                 except APIError as e:
                     st.error(f"Failed to list bias calculations: {e.detail}")
                 except Exception as e:
@@ -259,42 +265,122 @@ def sessions_page():
                 )
             st.json(detail)
 
-    # ── Create session form ───────────────────────────────────────────
-    with st.expander("➕ Create new session", expanded=False):
-        with st.form("create_session_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                symbol = st.text_input("Symbol", placeholder="e.g. AAPL, EURUSD")
-                timeframe = st.selectbox("Timeframe", TIMEFRAMES, index=0)
-            with col2:
-                hysteresis_k = st.number_input("Hysteresis K", min_value=1, value=2, step=1)
-                persistence_window = st.number_input("Persistence Window", min_value=5, value=20, step=1)
-            bottom_col1, bottom_col2 = st.columns(2)
-            with bottom_col1:
-                persistence_threshold = st.number_input("Persistence Threshold", min_value=1, value=15, step=1)
-            with bottom_col2:
-                swing_lookback = st.number_input("Swing Lookback", min_value=1, value=2, step=1)
+    with alerts_tab:
+        st.subheader("Alerts")
 
-            submitted = st.form_submit_button("Create Session", use_container_width=True)
-            if submitted:
-                if not symbol or not symbol.strip():
-                    st.error("Symbol is required.")
-                else:
+        with st.container(border=True):
+            st.markdown("**List Alerts**")
+            list_cols = st.columns(4)
+            with list_cols[0]:
+                al_status_filter = st.selectbox("Status", ["All"] + ALERT_STATUSES, index=0, key="al_list_status")
+            with list_cols[1]:
+                al_direction_filter = st.selectbox(
+                    "Direction", ["All"] + ALERT_DIRECTIONS, index=0, key="al_list_direction"
+                )
+            with list_cols[2]:
+                al_limit = st.number_input("Limit", min_value=1, max_value=1000, value=100, step=10, key="al_list_limit")
+            with list_cols[3]:
+                al_offset = st.number_input("Offset", min_value=0, value=0, step=10, key="al_list_offset")
+
+            if st.button("Get Alerts", use_container_width=True, key="al_get_list"):
+                try:
+                    alerts = api_client.list_alerts(
+                        status=al_status_filter if al_status_filter != "All" else None,
+                        direction=al_direction_filter if al_direction_filter != "All" else None,
+                        limit=int(al_limit),
+                        offset=int(al_offset),
+                    )
+                    st.session_state["alerts_list"] = alerts
+                    st.success(f"Loaded {len(alerts)} alert(s).")
+                except APIError as e:
+                    st.error(f"Failed to list alerts: {e.detail}")
+                except Exception as e:
+                    st.error(f"Connection error: {e}")
+
+            if "alerts_list" in st.session_state:
+                import pandas as pd
+
+                alerts_df = pd.DataFrame(st.session_state["alerts_list"])
+                if "created_at" in alerts_df.columns:
+                    alerts_df["created_at"] = alerts_df["created_at"].apply(_fmt_dt)
+                st.dataframe(alerts_df, use_container_width=True, hide_index=True)
+
+        with st.container(border=True):
+            st.markdown("**Get One / Delete One**")
+            action_cols = st.columns(2)
+            with action_cols[0]:
+                al_detail_id = st.number_input("Alert ID (Get One)", min_value=1, value=1, step=1, key="al_detail_id")
+                if st.button("Get One Alert", use_container_width=True, key="al_get_one"):
                     try:
-                        new_session = api_client.create_session(
-                            symbol=symbol,
-                            timeframe=timeframe,
-                            hysteresis_k=int(hysteresis_k),
-                            persistence_window=int(persistence_window),
-                            persistence_threshold=int(persistence_threshold),
-                            swing_lookback=int(swing_lookback),
-                        )
-                        st.success(f"Session **#{new_session['id']}** created for **{new_session['symbol']}**")
-                        st.rerun()
+                        st.session_state["alert_detail"] = api_client.get_alert(int(al_detail_id))
                     except APIError as e:
-                        st.error(f"Failed to create session: {e.detail}")
+                        st.error(f"Failed to get alert: {e.detail}")
                     except Exception as e:
                         st.error(f"Connection error: {e}")
+            with action_cols[1]:
+                al_delete_id = st.number_input(
+                    "Alert ID (Delete One)", min_value=1, value=1, step=1, key="al_delete_id"
+                )
+                if st.button("Delete One Alert", use_container_width=True, key="al_delete_one", type="primary"):
+                    try:
+                        api_client.delete_alert(int(al_delete_id))
+                        st.success(f"Deleted alert #{int(al_delete_id)}")
+                        if "alerts_list" in st.session_state:
+                            st.session_state["alerts_list"] = [
+                                row
+                                for row in st.session_state["alerts_list"]
+                                if int(row.get("id", -1)) != int(al_delete_id)
+                            ]
+                        if "alert_detail" in st.session_state and int(st.session_state["alert_detail"].get("id", -1)) == int(
+                            al_delete_id
+                        ):
+                            st.session_state.pop("alert_detail", None)
+                    except APIError as e:
+                        st.error(f"Failed to delete alert: {e.detail}")
+                    except Exception as e:
+                        st.error(f"Connection error: {e}")
+
+            if "alert_detail" in st.session_state:
+                st.markdown("**Alert Detail**")
+                st.json(st.session_state["alert_detail"])
+
+    with sessions_tab:
+        # ── Create session form ───────────────────────────────────────
+        with st.expander("➕ Create new session", expanded=False):
+            with st.form("create_session_form"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    symbol = st.text_input("Symbol", placeholder="e.g. AAPL, EURUSD")
+                    timeframe = st.selectbox("Timeframe", TIMEFRAMES, index=0)
+                with col2:
+                    hysteresis_k = st.number_input("Hysteresis K", min_value=1, value=2, step=1)
+                    persistence_window = st.number_input("Persistence Window", min_value=5, value=20, step=1)
+                bottom_col1, bottom_col2 = st.columns(2)
+                with bottom_col1:
+                    persistence_threshold = st.number_input("Persistence Threshold", min_value=1, value=15, step=1)
+                with bottom_col2:
+                    swing_lookback = st.number_input("Swing Lookback", min_value=1, value=2, step=1)
+
+                submitted = st.form_submit_button("Create Session", use_container_width=True)
+                if submitted:
+                    if not symbol or not symbol.strip():
+                        st.error("Symbol is required.")
+                    else:
+                        try:
+                            new_session = api_client.create_session(
+                                symbol=symbol,
+                                timeframe=timeframe,
+                                hysteresis_k=int(hysteresis_k),
+                                persistence_window=int(persistence_window),
+                                persistence_threshold=int(persistence_threshold),
+                                swing_lookback=int(swing_lookback),
+                            )
+                            st.success(f"Session **#{new_session['id']}** created for **{new_session['symbol']}**")
+                            st.rerun()
+                        except APIError as e:
+                            st.error(f"Failed to create session: {e.detail}")
+                        except Exception as e:
+                            st.error(f"Connection error: {e}")
 
     st.divider()
 
@@ -370,6 +456,31 @@ def sessions_page():
                 st.caption(f"Started: **{_fmt_dt(sess.get('started_at'))}**")
             with param_cols[3]:
                 st.caption(f"Ended: **{_fmt_dt(sess.get('ended_at'))}**")
+
+            pullback_cols = st.columns(4)
+            with pullback_cols[0]:
+                st.caption(f"Swing Lookback: **{sess.get('swing_lookback', '—')}**")
+            with pullback_cols[1]:
+                st.caption(f"Pullback State: **{sess.get('pullback_state', 'NONE')}**")
+            with pullback_cols[2]:
+                st.caption(f"Pullback Direction: **{sess.get('pullback_direction', 'NONE')}**")
+            with pullback_cols[3]:
+                touched = "Yes" if sess.get("touched_sma20") else "No"
+                st.caption(f"Touched SMA20: **{touched}**")
+
+            level_cols = st.columns(5)
+            with level_cols[0]:
+                st.caption(f"PB Anchor High: **{sess.get('pb_anchor_high', '—')}**")
+            with level_cols[1]:
+                st.caption(f"PB Low: **{sess.get('pb_low', '—')}**")
+            with level_cols[2]:
+                st.caption(f"PB Anchor Low: **{sess.get('pb_anchor_low', '—')}**")
+            with level_cols[3]:
+                st.caption(f"PB High: **{sess.get('pb_high', '—')}**")
+            with level_cols[4]:
+                st.caption(f"PB Start At: **{_fmt_dt(sess.get('pb_start_at'))}**")
+
+            st.caption(f"Last Alert At: **{_fmt_dt(sess.get('last_alert_at'))}**")
 
             # ── Action buttons ────────────────────────────────────────
             btn_cols = st.columns(5)
@@ -589,25 +700,62 @@ def ibkr_page():
             import pandas as pd
             import altair as alt
 
-            indexed_bars = [{"bar_index": idx, **bar} for idx, bar in enumerate(bars)]
-            display_cols = [
-                c
-                for c in ["bar_index", "date", "open", "high", "low", "close", "sma9", "sma20", "volume", "vwap"]
-                if c in indexed_bars[0]
+            indexed_bars = []
+            for idx, bar in enumerate(bars):
+                row = dict(bar)
+                indicators = row.get("indicators")
+                if isinstance(indicators, dict):
+                    for key, value in indicators.items():
+                        row.setdefault(key, value)
+
+                if "atr14" not in row:
+                    for key, value in row.items():
+                        normalized = "".join(ch for ch in str(key).lower() if ch.isalnum())
+                        if normalized in {"atr14", "atr"}:
+                            row["atr14"] = value
+                            break
+
+                indexed_bars.append({"bar_index": idx, **row})
+
+            df = pd.DataFrame(indexed_bars)
+            if "atr14" not in df.columns:
+                atr_like_cols = [col for col in df.columns if "atr" in str(col).lower()]
+                if atr_like_cols:
+                    df["atr14"] = df[atr_like_cols[0]]
+            if "atr14" not in df.columns:
+                df["atr14"] = None
+
+            desired_cols = [
+                "bar_index",
+                "date",
+                "open",
+                "high",
+                "low",
+                "close",
+                "atr14",
+                "sma9",
+                "sma20",
+                "volume",
+                "vwap",
             ]
-            st.dataframe(indexed_bars, column_order=display_cols, use_container_width=True, hide_index=True)
+            display_cols = [c for c in desired_cols if c in df.columns]
+            display_df = df[display_cols].copy()
+            if "atr14" in display_df.columns:
+                display_df["atr14"] = pd.to_numeric(display_df["atr14"], errors="coerce")
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
 
             # Basic candlestick chart with optional SMA overlays.
-            df = pd.DataFrame(indexed_bars)
             if {"date", "open", "high", "low", "close"}.issubset(df.columns):
-                for col in ["open", "high", "low", "close", "sma9", "sma20"]:
+                for col in ["open", "high", "low", "close", "sma9", "sma20", "atr14"]:
                     if col in df.columns:
                         df[col] = pd.to_numeric(df[col], errors="coerce")
                 df["date"] = pd.to_datetime(df["date"], errors="coerce")
                 chart_df = df.dropna(subset=["date", "open", "high", "low", "close"]).copy()
 
                 if not chart_df.empty:
-                    st.caption("Legend: Green = Up candle | Red = Down candle | Blue = SMA9 | Orange = SMA20")
+                    st.caption(
+                        "Legend: Green = Up candle | Red = Down candle | Blue = SMA9 | Orange = SMA20 | Purple = ATR14"
+                    )
 
                     chart_df["candle_low"] = chart_df[["open", "close"]].min(axis=1)
                     chart_df["candle_high"] = chart_df[["open", "close"]].max(axis=1)
@@ -647,7 +795,21 @@ def ibkr_page():
                         )
                         chart = chart + sma20_line
 
-                    st.altair_chart(chart.properties(height=380), use_container_width=True)
+                    if "atr14" in chart_df.columns and chart_df["atr14"].notna().any():
+                        atr_df = chart_df.dropna(subset=["atr14"]).copy()
+                        atr_chart = alt.Chart(atr_df).mark_line(color="#9c27b0", strokeWidth=2).encode(
+                            x=alt.X("date:T", title="Time"),
+                            y=alt.Y("atr14:Q", title="ATR14", scale=alt.Scale(zero=False)),
+                        )
+                        st.altair_chart(
+                            alt.vconcat(
+                                chart.properties(height=300),
+                                atr_chart.properties(height=120),
+                            ).resolve_scale(x="shared"),
+                            use_container_width=True,
+                        )
+                    else:
+                        st.altair_chart(chart.properties(height=380), use_container_width=True)
                 else:
                     st.info("Bars returned, but date/price values are not chartable.")
 

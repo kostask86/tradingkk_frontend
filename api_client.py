@@ -118,6 +118,58 @@ def delete_bias_calculation(bias_calculation_id: int) -> None:
     return _handle_response(resp, 204)
 
 
+# ── Alerts ───────────────────────────────────────────────────────────
+
+def create_alert(
+    session_id: int,
+    direction: str,
+    entry_signal_price: float,
+    stop_price: float,
+    target_price: Optional[float] = None,
+    reason: Optional[str] = None,
+    status: str = "OPEN",
+) -> dict:
+    payload = {
+        "session_id": session_id,
+        "direction": direction,
+        "entry_signal_price": entry_signal_price,
+        "stop_price": stop_price,
+        "target_price": target_price,
+        "reason": reason,
+        "status": status,
+    }
+    resp = requests.post(f"{BASE_URL}/api/alerts/", json=payload)
+    return _handle_response(resp, 201)
+
+
+def list_alerts(
+    session_id: Optional[int] = None,
+    status: Optional[str] = None,
+    direction: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict]:
+    params: dict = {"limit": limit, "offset": offset}
+    if session_id is not None:
+        params["session_id"] = session_id
+    if status:
+        params["status"] = status
+    if direction:
+        params["direction"] = direction
+    resp = requests.get(f"{BASE_URL}/api/alerts/", params=params)
+    return _handle_response(resp)
+
+
+def get_alert(alert_id: int) -> dict:
+    resp = requests.get(f"{BASE_URL}/api/alerts/detail", params={"alert_id": alert_id})
+    return _handle_response(resp)
+
+
+def delete_alert(alert_id: int) -> None:
+    resp = requests.delete(f"{BASE_URL}/api/alerts/", params={"alert_id": alert_id})
+    return _handle_response(resp, 204)
+
+
 # ── IBKR ──────────────────────────────────────────────────────────────
 
 def ibkr_connect() -> dict:
