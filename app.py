@@ -4,6 +4,7 @@ from api_client import APIError
 from datetime import datetime, timezone
 
 TIMEFRAMES = ["1m", "15m", "30m", "1h", "4h"]
+PROVIDERS = ["IBKR", "BYBIT"]
 ALERT_STATUSES = ["OPEN", "CANCELLED", "FILLED", "EXPIRED"]
 ALERT_DIRECTIONS = ["LONG", "SHORT"]
 STATUS_COLORS = {
@@ -105,14 +106,16 @@ with st.sidebar:
         st.error("Backend unreachable (localhost:8000)")
 
     st.divider()
-    page = st.radio("Navigation", ["Sessions", "IBKR"], index=0, label_visibility="collapsed")
+    page = st.radio("Navigation", ["Sessions", "Provider"], index=0, label_visibility="collapsed")
 
 
 # ── Sessions page ─────────────────────────────────────────────────────
 
 def sessions_page():
     st.header("Sessions")
-    sessions_tab, bias_tab, alerts_tab = st.tabs(["Sessions", "Bias Calculations", "Alerts"])
+    sessions_tab, bias_tab, pullback_tab, visualize_tab, alerts_tab = st.tabs(
+        ["Sessions", "Bias Calculations", "Pullback Calculations", "Visualize", "Alerts"]
+    )
 
     with sessions_tab:
         left_col, right_col = st.columns([3, 1])
@@ -175,38 +178,16 @@ def sessions_page():
                 except Exception as e:
                     st.error(f"Connection error: {e}")
 
-        action_cols = st.columns(2)
-        with action_cols[0]:
-            detail_id = st.number_input(
-                "Bias Calculation ID (Get One)", min_value=1, value=1, step=1, key="bc_detail_id"
-            )
-            if st.button("Get One", use_container_width=True, key="bc_get_one"):
-                try:
-                    st.session_state["bias_calculation_detail"] = api_client.get_bias_calculation(int(detail_id))
-                except APIError as e:
-                    st.error(f"Failed to get bias calculation: {e.detail}")
-                except Exception as e:
-                    st.error(f"Connection error: {e}")
-
-        with action_cols[1]:
-            delete_id = st.number_input(
-                "Bias Calculation ID (Delete One)", min_value=1, value=1, step=1, key="bc_delete_id"
-            )
-            if st.button("Delete One", use_container_width=True, key="bc_delete_one", type="primary"):
-                try:
-                    api_client.delete_bias_calculation(int(delete_id))
-                    st.success(f"Deleted bias calculation #{int(delete_id)}")
-                    st.session_state.pop("bias_calculation_detail", None)
-                    if "bias_calculations_list" in st.session_state:
-                        st.session_state["bias_calculations_list"] = [
-                            row
-                            for row in st.session_state["bias_calculations_list"]
-                            if int(row.get("id", -1)) != int(delete_id)
-                        ]
-                except APIError as e:
-                    st.error(f"Failed to delete bias calculation: {e.detail}")
-                except Exception as e:
-                    st.error(f"Connection error: {e}")
+        detail_id = st.number_input(
+            "Bias Calculation ID (Get One)", min_value=1, value=1, step=1, key="bc_detail_id"
+        )
+        if st.button("Get One", use_container_width=True, key="bc_get_one"):
+            try:
+                st.session_state["bias_calculation_detail"] = api_client.get_bias_calculation(int(detail_id))
+            except APIError as e:
+                st.error(f"Failed to get bias calculation: {e.detail}")
+            except Exception as e:
+                st.error(f"Connection error: {e}")
 
         if "bias_calculations_list" in st.session_state:
             with st.container(border=True):
@@ -264,6 +245,311 @@ def sessions_page():
                     unsafe_allow_html=True,
                 )
             st.json(detail)
+
+    with pullback_tab:
+        st.subheader("Pullback Calculations")
+        list_cols = st.columns(3)
+        with list_cols[0]:
+            pc_limit = st.number_input("Limit", min_value=1, max_value=1000, value=100, step=10, key="pc_limit")
+        with list_cols[1]:
+            pc_offset = st.number_input("Offset", min_value=0, value=0, step=10, key="pc_offset")
+        with list_cols[2]:
+            st.write("")
+            if st.button("Get All", use_container_width=True, key="pc_get_all"):
+                try:
+                    sessions_for_pullbacks = api_client.list_sessions(limit=500, offset=0)
+                    all_pullbacks = []
+                    for session_row in sessions_for_pullbacks:
+                        session_id = int(session_row["id"])
+                        session_pullbacks = api_client.list_pullback_calculations(
+                            session_id=session_id,
+                            limit=int(pc_limit),
+                            offset=int(pc_offset),
+                        )
+                        all_pullbacks.extend(session_pullbacks)
+                    st.session_state["pullback_calculations_list"] = all_pullbacks
+                    st.success(f"Loaded {len(all_pullbacks)} pullback calculation(s).")
+                except APIError as e:
+                    st.error(f"Failed to list pullback calculations: {e.detail}")
+                except Exception as e:
+                    st.error(f"Connection error: {e}")
+
+        detail_id = st.number_input(
+            "Pullback Calculation ID (Get One)", min_value=1, value=1, step=1, key="pc_detail_id"
+        )
+        if st.button("Get One", use_container_width=True, key="pc_get_one"):
+            try:
+                st.session_state["pullback_calculation_detail"] = api_client.get_pullback_calculation(int(detail_id))
+            except APIError as e:
+                st.error(f"Failed to get pullback calculation: {e.detail}")
+            except Exception as e:
+                st.error(f"Connection error: {e}")
+
+        if "pullback_calculations_list" in st.session_state:
+            with st.container(border=True):
+                st.markdown("**Session Pullback Calculations**")
+                import pandas as pd
+
+                df = pd.DataFrame(st.session_state["pullback_calculations_list"])
+                if "calculated_at" in df.columns:
+                    df["calculated_at"] = df["calculated_at"].apply(_fmt_dt)
+                if "pb_start_at" in df.columns:
+                    df["pb_start_at"] = df["pb_start_at"].apply(_fmt_dt)
+
+                bias_columns = [col for col in ["state_bias"] if col in df.columns]
+
+                def _bias_style(value):
+                    bias = str(value).upper()
+                    if bias == "BULLISH":
+                        return "color: #2ca02c; font-weight: 700;"
+                    if bias == "BEARISH":
+                        return "color: #d62728; font-weight: 700;"
+                    if bias == "NEUTRAL":
+                        return "color: #9aa0a6; font-weight: 700;"
+                    return ""
+
+                styled_df = df.style
+                if bias_columns:
+                    styled_df = styled_df.map(_bias_style, subset=bias_columns)
+
+                st.dataframe(styled_df, use_container_width=True, hide_index=True)
+
+        if "pullback_calculation_detail" in st.session_state:
+            detail = st.session_state["pullback_calculation_detail"]
+            with st.container(border=True):
+                st.markdown("**Pullback Calculation Detail**")
+                top_cols = st.columns(3)
+                with top_cols[0]:
+                    st.markdown(
+                        f"**State Bias**<br>{_bias_colored_html(detail.get('state_bias', 'NEUTRAL'))}",
+                        unsafe_allow_html=True,
+                    )
+                with top_cols[1]:
+                    st.metric("Pullback State", detail.get("pullback_state", "NONE"))
+                with top_cols[2]:
+                    st.metric("Pullback Direction", detail.get("pullback_direction", "NONE"))
+                st.json(detail)
+
+    with visualize_tab:
+        st.subheader("Visualize Session")
+
+        with st.container(border=True):
+            with st.form("visualize_session_form"):
+                viz_cols = st.columns(2)
+                with viz_cols[0]:
+                    viz_session_id = st.number_input("Session ID", min_value=1, value=1, step=1, key="viz_session_id")
+                with viz_cols[1]:
+                    viz_num_bars = st.number_input("Num Bars", min_value=20, max_value=1000, value=200, step=20, key="viz_num_bars")
+
+                if st.form_submit_button("Run Visualize", use_container_width=True):
+                    try:
+                        viz_result = api_client.visualize_session(int(viz_session_id), int(viz_num_bars))
+                        st.session_state["session_visualization_result"] = viz_result
+                    except APIError as e:
+                        st.error(f"Visualize failed: {e.detail}")
+                    except Exception as e:
+                        st.error(f"Connection error: {e}")
+
+        if "session_visualization_result" in st.session_state:
+            data = st.session_state["session_visualization_result"]
+            session = data.get("session", {})
+            bars = data.get("bars", [])
+
+            with st.container(border=True):
+                st.markdown(
+                    f"**Session #{session.get('id', '—')}** | Symbol: `{session.get('symbol', '—')}` | "
+                    f"Provider: `{session.get('provider', '—')}` | TF: `{session.get('timeframe', '—')}` | "
+                    f"Bars: `{data.get('bars_count', len(bars))}` | Market Connected: `{data.get('market_data_connected', False)}`"
+                )
+
+                import pandas as pd
+                import altair as alt
+
+                if bars:
+                    bars_df = pd.DataFrame([{"bar_index": idx, **bar} for idx, bar in enumerate(bars)])
+                    for col in ["open", "high", "low", "close", "sma9", "sma20", "atr14"]:
+                        if col in bars_df.columns:
+                            bars_df[col] = pd.to_numeric(bars_df[col], errors="coerce")
+                    bars_df["date"] = pd.to_datetime(bars_df.get("date"), errors="coerce")
+                    chart_df = bars_df.dropna(subset=["date", "open", "high", "low", "close"]).copy()
+
+                    if not chart_df.empty:
+                        chart_df["candle_low"] = chart_df[["open", "close"]].min(axis=1)
+                        chart_df["candle_high"] = chart_df[["open", "close"]].max(axis=1)
+                        chart_df["candle_color"] = chart_df.apply(
+                            lambda row: "#2ca02c" if row["close"] >= row["open"] else "#d62728", axis=1
+                        )
+
+                        price_scale = alt.Scale(zero=False)
+                        wick = alt.Chart(chart_df).mark_rule().encode(
+                            x=alt.X("date:T", title="Time"),
+                            y=alt.Y("low:Q", title="Price", scale=price_scale),
+                            y2="high:Q",
+                            color=alt.value("#9aa0a6"),
+                        )
+                        candle = alt.Chart(chart_df).mark_bar(size=8).encode(
+                            x=alt.X("date:T"),
+                            y=alt.Y("candle_low:Q", scale=price_scale),
+                            y2="candle_high:Q",
+                            color=alt.Color("candle_color:N", scale=None, legend=None),
+                        )
+                        chart = wick + candle
+
+                        if "sma9" in chart_df.columns and chart_df["sma9"].notna().any():
+                            chart = chart + alt.Chart(chart_df).mark_line(color="#1f77b4", strokeWidth=2).encode(
+                                x="date:T",
+                                y=alt.Y("sma9:Q", scale=price_scale),
+                            )
+                        if "sma20" in chart_df.columns and chart_df["sma20"].notna().any():
+                            chart = chart + alt.Chart(chart_df).mark_line(color="#ff7f0e", strokeWidth=2).encode(
+                                x="date:T",
+                                y=alt.Y("sma20:Q", scale=price_scale),
+                            )
+
+                        # ATR hint band around close ± ATR14.
+                        if "atr14" in chart_df.columns and chart_df["atr14"].notna().any():
+                            atr_hint_df = chart_df.dropna(subset=["atr14"]).copy()
+                            atr_hint_df["atr_upper"] = atr_hint_df["close"] + atr_hint_df["atr14"]
+                            atr_hint_df["atr_lower"] = atr_hint_df["close"] - atr_hint_df["atr14"]
+                            atr_band = alt.Chart(atr_hint_df).mark_area(opacity=0.12, color="#9c27b0").encode(
+                                x="date:T",
+                                y=alt.Y("atr_lower:Q", scale=price_scale),
+                                y2="atr_upper:Q",
+                            )
+                            chart = chart + atr_band
+
+                        # Swing markers and horizontal levels.
+                        swings = []
+                        for key in ["latest_high_swing", "previous_high_swing", "latest_low_swing", "previous_low_swing"]:
+                            if data.get(key):
+                                swings.append(data[key])
+                        if swings:
+                            swings_df = pd.DataFrame(swings)
+                            if {"bar_index", "type", "price"}.issubset(swings_df.columns):
+                                swings_df["bar_index"] = pd.to_numeric(swings_df["bar_index"], errors="coerce").astype("Int64")
+                                swings_df["price"] = pd.to_numeric(swings_df["price"], errors="coerce")
+                                swings_df = swings_df.dropna(subset=["bar_index", "price"])
+                                marker_df = swings_df.merge(chart_df[["bar_index", "date"]], on="bar_index", how="left")
+                                marker_df = marker_df.dropna(subset=["date", "price"])
+                                if not marker_df.empty:
+                                    markers = alt.Chart(marker_df).mark_point(
+                                        filled=True, size=280, stroke="black", strokeWidth=1.5, opacity=0.95
+                                    ).encode(
+                                        x="date:T",
+                                        y=alt.Y("price:Q", scale=price_scale),
+                                        color=alt.Color(
+                                            "type:N",
+                                            scale=alt.Scale(domain=["HIGH", "LOW"], range=["#ff0033", "#00b4ff"]),
+                                            legend=alt.Legend(title="Swing"),
+                                        ),
+                                        shape=alt.Shape(
+                                            "type:N",
+                                            scale=alt.Scale(domain=["HIGH", "LOW"], range=["triangle-up", "triangle-down"]),
+                                            legend=None,
+                                        ),
+                                    )
+                                    chart = chart + markers
+
+                        # Latest alert entry/stop/target lines.
+                        latest_alert = data.get("latest_alert")
+                        if isinstance(latest_alert, dict):
+                            for field, color in [
+                                ("entry_signal_price", "#00c853"),
+                                ("stop_price", "#d50000"),
+                                ("target_price", "#2962ff"),
+                            ]:
+                                val = latest_alert.get(field)
+                                if val is not None:
+                                    line_df = pd.DataFrame([{"y": float(val)}])
+                                    line = alt.Chart(line_df).mark_rule(color=color, strokeDash=[6, 3]).encode(
+                                        y=alt.Y("y:Q", scale=price_scale)
+                                    )
+                                    chart = chart + line
+
+                        st.caption(
+                            "Legend: Candles + SMA9/SMA20 | Purple band: ATR14 hint | Swing markers: High/Low | "
+                            "Alert lines: Entry/Stop/Target"
+                        )
+                        st.altair_chart(chart.properties(height=420), use_container_width=True)
+                    else:
+                        st.info("Visualization bars are not chartable.")
+                else:
+                    st.info("No bars returned in visualization response.")
+
+                # Bias status panel.
+                st.markdown("### Bias Status")
+                bias_cols = st.columns(4)
+                with bias_cols[0]:
+                    st.markdown(
+                        f"**Session State Bias**<br>{_bias_colored_html(session.get('state_bias', 'NEUTRAL'))}",
+                        unsafe_allow_html=True,
+                    )
+                with bias_cols[1]:
+                    st.markdown(
+                        f"**Session Candidate Bias**<br>{_bias_colored_html(session.get('candidate_bias', 'NEUTRAL'))}",
+                        unsafe_allow_html=True,
+                    )
+                with bias_cols[2]:
+                    st.metric("Consecutive Count", session.get("consecutive_count", 0))
+                with bias_cols[3]:
+                    st.metric("Can Calculate Bias", data.get("latest_bias_calculation", {}).get("can_calculate_bias", "—"))
+
+                latest_bias = data.get("latest_bias_calculation")
+                if latest_bias:
+                    lb_cols = st.columns(4)
+                    with lb_cols[0]:
+                        st.markdown(
+                            f"**MA Bar Bias**<br>{_bias_colored_html(latest_bias.get('ma_bar_bias', 'NEUTRAL'))}",
+                            unsafe_allow_html=True,
+                        )
+                    with lb_cols[1]:
+                        st.markdown(
+                            f"**MA Persistent Bias**<br>{_bias_colored_html(latest_bias.get('ma_persistent_bias', 'NEUTRAL'))}",
+                            unsafe_allow_html=True,
+                        )
+                    with lb_cols[2]:
+                        st.markdown(
+                            f"**Structure Bias**<br>{_bias_colored_html(latest_bias.get('structure_bias', 'NEUTRAL'))}",
+                            unsafe_allow_html=True,
+                        )
+                    with lb_cols[3]:
+                        st.metric("Bull / Bear Count", f"{latest_bias.get('bull_count', 0)} / {latest_bias.get('bear_count', 0)}")
+
+                # Pullback status panel.
+                st.markdown("### Pullback Status")
+                pb_cols = st.columns(5)
+                with pb_cols[0]:
+                    st.metric("Pullback State", session.get("pullback_state", "NONE"))
+                with pb_cols[1]:
+                    st.metric("Direction", session.get("pullback_direction", "NONE"))
+                with pb_cols[2]:
+                    st.metric("PB Anchor High", session.get("pb_anchor_high", "—"))
+                with pb_cols[3]:
+                    st.metric("PB Anchor Low", session.get("pb_anchor_low", "—"))
+                with pb_cols[4]:
+                    st.metric("Touched SMA20", "Yes" if session.get("touched_sma20") else "No")
+
+                latest_pullback = data.get("latest_pullback_calculation")
+                if latest_pullback:
+                    st.markdown("**Latest Pullback Calculation**")
+                    st.json(latest_pullback)
+
+                # Alert panel.
+                st.markdown("### Alert")
+                latest_alert = data.get("latest_alert")
+                if latest_alert:
+                    alert_cols = st.columns(4)
+                    with alert_cols[0]:
+                        st.metric("Direction", latest_alert.get("direction", "—"))
+                    with alert_cols[1]:
+                        st.metric("Entry", latest_alert.get("entry_signal_price", "—"))
+                    with alert_cols[2]:
+                        st.metric("Stop", latest_alert.get("stop_price", "—"))
+                    with alert_cols[3]:
+                        st.metric("Target", latest_alert.get("target_price", "—"))
+                    st.caption(f"Status: {latest_alert.get('status', '—')}")
+                else:
+                    st.info("No latest alert available.")
 
     with alerts_tab:
         st.subheader("Alerts")
@@ -351,6 +637,7 @@ def sessions_page():
                 col1, col2 = st.columns(2)
                 with col1:
                     symbol = st.text_input("Symbol", placeholder="e.g. AAPL, EURUSD")
+                    provider = st.selectbox("Provider", PROVIDERS, index=0)
                     timeframe = st.selectbox("Timeframe", TIMEFRAMES, index=0)
                 with col2:
                     hysteresis_k = st.number_input("Hysteresis K", min_value=1, value=2, step=1)
@@ -369,6 +656,7 @@ def sessions_page():
                         try:
                             new_session = api_client.create_session(
                                 symbol=symbol,
+                                provider=provider,
                                 timeframe=timeframe,
                                 hysteresis_k=int(hysteresis_k),
                                 persistence_window=int(persistence_window),
@@ -385,7 +673,7 @@ def sessions_page():
     st.divider()
 
     # ── Filters ───────────────────────────────────────────────────────
-    filter_col1, filter_col2 = st.columns(2)
+    filter_col1, filter_col2, filter_col3 = st.columns(3)
     with filter_col1:
         status_filter = st.selectbox(
             "Filter by status",
@@ -394,12 +682,15 @@ def sessions_page():
         )
     with filter_col2:
         symbol_filter = st.text_input("Filter by symbol", placeholder="Leave blank for all")
+    with filter_col3:
+        provider_filter = st.selectbox("Filter by provider", ["All"] + PROVIDERS, index=0)
 
     # ── Fetch sessions ────────────────────────────────────────────────
     try:
         sessions = api_client.list_sessions(
             status=status_filter if status_filter != "All" else None,
             symbol=symbol_filter.strip().upper() if symbol_filter.strip() else None,
+            provider=provider_filter if provider_filter != "All" else None,
         )
     except APIError as e:
         st.error(f"Failed to load sessions: {e.detail}")
@@ -433,7 +724,7 @@ def sessions_page():
 
             detail_cols = st.columns(5)
             with detail_cols[0]:
-                st.metric("Timeframe", sess["timeframe"])
+                st.metric("Provider / TF", f"{sess.get('provider', 'IBKR')} / {sess['timeframe']}")
             with detail_cols[1]:
                 state_bias = sess.get("state_bias", sess.get("current_bias", "NEUTRAL"))
                 st.markdown(f"**State Bias**<br>{_bias_colored_html(state_bias)}", unsafe_allow_html=True)
@@ -549,6 +840,14 @@ def sessions_page():
                     st.subheader(f"Edit Session #{sid}")
                     ec1, ec2 = st.columns(2)
                     with ec1:
+                        new_provider = st.selectbox(
+                            "Provider",
+                            PROVIDERS,
+                            index=PROVIDERS.index(sess.get("provider", "IBKR"))
+                            if sess.get("provider", "IBKR") in PROVIDERS
+                            else 0,
+                            key=f"provider_{sid}",
+                        )
                         new_tf = st.selectbox(
                             "Timeframe",
                             TIMEFRAMES,
@@ -574,6 +873,7 @@ def sessions_page():
                             try:
                                 api_client.update_session(
                                     sid,
+                                    provider=new_provider,
                                     timeframe=new_tf,
                                     hysteresis_k=int(new_hk),
                                     persistence_window=int(new_pw),
@@ -590,12 +890,13 @@ def sessions_page():
                             st.rerun()
 
 
-# ── IBKR page ─────────────────────────────────────────────────────────
+# ── Provider page ─────────────────────────────────────────────────────
 
 SEC_TYPES = ["STK", "FOREX"]
 
-def ibkr_page():
-    st.header("IBKR Gateway")
+def provider_page():
+    st.header("Provider Gateway")
+    selected_provider = st.selectbox("Provider", PROVIDERS, index=0, key="provider_gateway_select")
 
     # ── Connection controls ───────────────────────────────────────────
     st.subheader("Connection")
@@ -604,7 +905,7 @@ def ibkr_page():
     with conn_cols[0]:
         if st.button("Connect", use_container_width=True):
             try:
-                result = api_client.ibkr_connect()
+                result = api_client.provider_connect(provider=selected_provider)
                 st.success(f"Connected: {result}")
             except APIError as e:
                 st.error(f"Connect failed: {e.detail}")
@@ -614,7 +915,7 @@ def ibkr_page():
     with conn_cols[1]:
         if st.button("Disconnect", use_container_width=True):
             try:
-                result = api_client.ibkr_disconnect()
+                result = api_client.provider_disconnect(provider=selected_provider)
                 st.success(f"Disconnected: {result}")
             except APIError as e:
                 st.error(f"Disconnect failed: {e.detail}")
@@ -624,17 +925,17 @@ def ibkr_page():
     with conn_cols[2]:
         if st.button("Check Status", use_container_width=True):
             try:
-                status = api_client.ibkr_status()
-                st.session_state["ibkr_status"] = status
+                status = api_client.provider_status(provider=selected_provider)
+                st.session_state["provider_status"] = status
             except APIError as e:
                 st.error(f"Status check failed: {e.detail}")
             except Exception as e:
                 st.error(f"Connection error: {e}")
 
-    if "ibkr_status" in st.session_state:
+    if "provider_status" in st.session_state:
         with st.container(border=True):
             st.markdown("**Gateway Status**")
-            st.json(st.session_state["ibkr_status"])
+            st.json(st.session_state["provider_status"])
 
     st.divider()
 
@@ -658,8 +959,9 @@ def ibkr_page():
                 st.error("Symbol is required.")
             else:
                 try:
-                    bar_data = api_client.ibkr_test_bar(
+                    bar_data = api_client.get_test_bars(
                         symbol=tb_symbol,
+                        provider=selected_provider,
                         timeframe=tb_timeframe,
                         sec_type=tb_sec_type,
                         num_bars=int(tb_num_bars),
@@ -837,6 +1139,7 @@ def ibkr_page():
                 try:
                     swing_data = api_client.detect_swings(
                         symbol=sw_symbol,
+                        provider=selected_provider,
                         timeframe=sw_timeframe,
                         sec_type=sw_sec_type,
                         lookback=int(sw_lookback),
@@ -845,8 +1148,9 @@ def ibkr_page():
                     try:
                         chart_bars = int(swing_data.get("total_bars", 20))
                         chart_bars = max(1, min(200, chart_bars))
-                        swing_bars_data = api_client.ibkr_test_bar(
+                        swing_bars_data = api_client.get_test_bars(
                             symbol=sw_symbol,
+                            provider=selected_provider,
                             timeframe=sw_timeframe,
                             sec_type=sw_sec_type,
                             num_bars=chart_bars,
@@ -1018,6 +1322,7 @@ def ibkr_page():
                 try:
                     cb_result = api_client.calculate_candidate_bias(
                         symbol=cb_symbol,
+                        provider=selected_provider,
                         timeframe=cb_timeframe,
                         sec_type=cb_sec_type,
                         lookback=int(cb_lookback),
@@ -1174,5 +1479,5 @@ def ibkr_page():
 
 if page == "Sessions":
     sessions_page()
-elif page == "IBKR":
-    ibkr_page()
+elif page == "Provider":
+    provider_page()

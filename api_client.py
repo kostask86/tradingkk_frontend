@@ -28,6 +28,7 @@ def _handle_response(resp: requests.Response, expected_status: int = 200):
 
 def create_session(
     symbol: str,
+    provider: str = "IBKR",
     timeframe: str = "1m",
     hysteresis_k: int = 2,
     persistence_window: int = 20,
@@ -36,6 +37,7 @@ def create_session(
 ) -> dict:
     payload = {
         "symbol": symbol.upper().strip(),
+        "provider": provider,
         "timeframe": timeframe,
         "hysteresis_k": hysteresis_k,
         "persistence_window": persistence_window,
@@ -49,6 +51,7 @@ def create_session(
 def list_sessions(
     status: Optional[str] = None,
     symbol: Optional[str] = None,
+    provider: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
 ) -> list[dict]:
@@ -57,6 +60,8 @@ def list_sessions(
         params["status"] = status
     if symbol:
         params["symbol"] = symbol
+    if provider:
+        params["provider"] = provider
     resp = requests.get(f"{BASE_URL}/api/sessions/", params=params)
     return _handle_response(resp)
 
@@ -84,6 +89,14 @@ def pause_session(session_id: int) -> dict:
 
 def end_session(session_id: int) -> dict:
     resp = requests.post(f"{BASE_URL}/api/sessions/end", params={"session_id": session_id})
+    return _handle_response(resp)
+
+
+def visualize_session(session_id: int, num_bars: int = 200) -> dict:
+    resp = requests.get(
+        f"{BASE_URL}/api/sessions/visualize",
+        params={"session_id": session_id, "num_bars": num_bars},
+    )
     return _handle_response(resp)
 
 
@@ -116,6 +129,24 @@ def delete_bias_calculation(bias_calculation_id: int) -> None:
         params={"bias_calculation_id": bias_calculation_id},
     )
     return _handle_response(resp, 204)
+
+
+# ── Pullback Calculations ────────────────────────────────────────────
+
+def get_pullback_calculation(pullback_calculation_id: int) -> dict:
+    resp = requests.get(
+        f"{BASE_URL}/api/pullback-calculations/detail",
+        params={"pullback_calculation_id": pullback_calculation_id},
+    )
+    return _handle_response(resp)
+
+
+def list_pullback_calculations(session_id: int, limit: int = 100, offset: int = 0) -> list[dict]:
+    resp = requests.get(
+        f"{BASE_URL}/api/pullback-calculations/",
+        params={"session_id": session_id, "limit": limit, "offset": offset},
+    )
+    return _handle_response(resp)
 
 
 # ── Alerts ───────────────────────────────────────────────────────────
@@ -170,26 +201,33 @@ def delete_alert(alert_id: int) -> None:
     return _handle_response(resp, 204)
 
 
-# ── IBKR ──────────────────────────────────────────────────────────────
+# ── Provider ──────────────────────────────────────────────────────────
 
-def ibkr_connect() -> dict:
-    resp = requests.post(f"{BASE_URL}/api/ibkr/connect")
+def provider_connect(provider: str = "IBKR") -> dict:
+    resp = requests.post(f"{BASE_URL}/api/provider/connect", params={"provider": provider})
     return _handle_response(resp)
 
 
-def ibkr_disconnect() -> dict:
-    resp = requests.post(f"{BASE_URL}/api/ibkr/disconnect")
+def provider_disconnect(provider: str = "IBKR") -> dict:
+    resp = requests.post(f"{BASE_URL}/api/provider/disconnect", params={"provider": provider})
     return _handle_response(resp)
 
 
-def ibkr_status() -> dict:
-    resp = requests.get(f"{BASE_URL}/api/ibkr/status")
+def provider_status(provider: str = "IBKR") -> dict:
+    resp = requests.get(f"{BASE_URL}/api/provider/status", params={"provider": provider})
     return _handle_response(resp)
 
 
-def ibkr_test_bar(symbol: str, timeframe: str = "1m", sec_type: str = "STK", num_bars: int = 20) -> dict:
+def get_test_bars(
+    symbol: str,
+    provider: str = "IBKR",
+    timeframe: str = "1m",
+    sec_type: str = "STK",
+    num_bars: int = 20,
+) -> dict:
     params = {
         "symbol": symbol.upper().strip(),
+        "provider": provider,
         "timeframe": timeframe,
         "sec_type": sec_type,
         "num_bars": num_bars,
@@ -202,12 +240,14 @@ def ibkr_test_bar(symbol: str, timeframe: str = "1m", sec_type: str = "STK", num
 
 def detect_swings(
     symbol: str,
+    provider: str = "IBKR",
     timeframe: str = "1m",
     sec_type: str = "STK",
     lookback: int = 2,
 ) -> dict:
     params = {
         "symbol": symbol.upper().strip(),
+        "provider": provider,
         "timeframe": timeframe,
         "sec_type": sec_type,
         "lookback": lookback,
@@ -218,6 +258,7 @@ def detect_swings(
 
 def calculate_candidate_bias(
     symbol: str,
+    provider: str = "IBKR",
     timeframe: str = "1m",
     sec_type: str = "STK",
     lookback: int = 2,
@@ -226,6 +267,7 @@ def calculate_candidate_bias(
 ) -> dict:
     params = {
         "symbol": symbol.upper().strip(),
+        "provider": provider,
         "timeframe": timeframe,
         "sec_type": sec_type,
         "lookback": lookback,
