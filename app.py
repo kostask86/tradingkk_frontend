@@ -320,7 +320,7 @@ def sessions_page():
             detail = st.session_state["pullback_calculation_detail"]
             with st.container(border=True):
                 st.markdown("**Pullback Calculation Detail**")
-                top_cols = st.columns(3)
+                top_cols = st.columns(4)
                 with top_cols[0]:
                     st.markdown(
                         f"**State Bias**<br>{_bias_colored_html(detail.get('state_bias', 'NEUTRAL'))}",
@@ -330,6 +330,9 @@ def sessions_page():
                     st.metric("Pullback State", detail.get("pullback_state", "NONE"))
                 with top_cols[2]:
                     st.metric("Pullback Direction", detail.get("pullback_direction", "NONE"))
+                with top_cols[3]:
+                    st.metric("Trigger Alert", "Yes" if detail.get("trigger_alert") else "No")
+                st.caption(f"Reset Reason: **{detail.get('reset_reason', '—')}**")
                 st.json(detail)
 
     with visualize_tab:
@@ -376,11 +379,39 @@ def sessions_page():
                     chart_df = bars_df.dropna(subset=["date", "open", "high", "low", "close"]).copy()
 
                     if not chart_df.empty:
+                        last_bar = chart_df.iloc[-1]
+                        last_close = pd.to_numeric(last_bar.get("close"), errors="coerce")
+                        last_close_display = (
+                            f"{float(last_close):,.2f}" if pd.notna(last_close) else "—"
+                        )
+                        chart_header_cols = st.columns([1, 2])
+                        with chart_header_cols[0]:
+                            st.metric("Last Closed Price", last_close_display)
+                        with chart_header_cols[1]:
+                            st.caption(f"Last bar time: {_fmt_dt(last_bar.get('date'))}")
+
                         chart_df["candle_low"] = chart_df[["open", "close"]].min(axis=1)
                         chart_df["candle_high"] = chart_df[["open", "close"]].max(axis=1)
-                        chart_df["candle_color"] = chart_df.apply(
-                            lambda row: "#2ca02c" if row["close"] >= row["open"] else "#d62728", axis=1
-                        )
+                        bull_indices = {
+                            int(i)
+                            for i in data.get("bull_bar_indices", [])
+                            if isinstance(i, (int, float)) or (isinstance(i, str) and i.isdigit())
+                        }
+                        bear_indices = {
+                            int(i)
+                            for i in data.get("bear_bar_indices", [])
+                            if isinstance(i, (int, float)) or (isinstance(i, str) and i.isdigit())
+                        }
+
+                        def _resolve_candle_color(row):
+                            idx = int(row["bar_index"])
+                            if idx in bull_indices:
+                                return "#00e676"
+                            if idx in bear_indices:
+                                return "#ff1744"
+                            return "#2ca02c" if row["close"] >= row["open"] else "#d62728"
+
+                        chart_df["candle_color"] = chart_df.apply(_resolve_candle_color, axis=1)
 
                         price_scale = alt.Scale(zero=False)
                         wick = alt.Chart(chart_df).mark_rule().encode(
@@ -396,6 +427,53 @@ def sessions_page():
                             color=alt.Color("candle_color:N", scale=None, legend=None),
                         )
                         chart = wick + candle
+
+                        highlight_rows = []
+                        if bull_indices or bear_indices:
+                            persistence_window = session.get("persistence_window")
+                            try:
+                                persistence_window = int(persistence_window)
+                            except (TypeError, ValueError):
+                                persistence_window = 0
+                            max_bar_index = int(chart_df["bar_index"].max())
+                            marker_min_index = (
+                                max_bar_index - persistence_window + 1 if persistence_window and persistence_window > 0 else 0
+                            )
+
+                            for _, row in chart_df.iterrows():
+                                idx = int(row["bar_index"])
+                                if idx < marker_min_index:
+                                    continue
+                                if idx in bull_indices:
+                                    highlight_rows.append(
+                                        {
+                                            "date": row["date"],
+                                            "price": row["low"],
+                                            "label": "Bull Index",
+                                        }
+                                    )
+                                if idx in bear_indices:
+                                    highlight_rows.append(
+                                        {
+                                            "date": row["date"],
+                                            "price": row["high"],
+                                            "label": "Bear Index",
+                                        }
+                                    )
+                        if highlight_rows:
+                            highlights_df = pd.DataFrame(highlight_rows)
+                            highlight_markers = alt.Chart(highlights_df).mark_point(
+                                filled=True, size=70, shape="circle", stroke="black", strokeWidth=0.8, opacity=0.9
+                            ).encode(
+                                x="date:T",
+                                y=alt.Y("price:Q", scale=price_scale),
+                                color=alt.Color(
+                                    "label:N",
+                                    scale=alt.Scale(domain=["Bull Index", "Bear Index"], range=["#00e676", "#ff1744"]),
+                                    legend=alt.Legend(title="Bar Highlights"),
+                                ),
+                            )
+                            chart = chart + highlight_markers
 
                         if "sma9" in chart_df.columns and chart_df["sma9"].notna().any():
                             chart = chart + alt.Chart(chart_df).mark_line(color="#1f77b4", strokeWidth=2).encode(
@@ -469,8 +547,9 @@ def sessions_page():
                                     chart = chart + line
 
                         st.caption(
-                            "Legend: Candles + SMA9/SMA20 | Purple band: ATR14 hint | Swing markers: High/Low | "
-                            "Alert lines: Entry/Stop/Target"
+                            "Legend: Candles + SMA9/SMA20 | Bright green/red candles: Bull/Bear index highlights | "
+                            "Small circle markers: Bull/Bear index points | Purple band: ATR14 hint | "
+                            "Swing markers: High/Low | Alert lines: Entry/Stop/Target"
                         )
                         st.altair_chart(chart.properties(height=420), use_container_width=True)
                     else:
@@ -534,6 +613,16 @@ def sessions_page():
                 latest_pullback = data.get("latest_pullback_calculation")
                 if latest_pullback:
                     st.markdown("**Latest Pullback Calculation**")
+                    lp_cols = st.columns(4)
+                    with lp_cols[0]:
+                        st.metric("State", latest_pullback.get("pullback_state", "NONE"))
+                    with lp_cols[1]:
+                        st.metric("Direction", latest_pullback.get("pullback_direction", "NONE"))
+                    with lp_cols[2]:
+                        st.metric("Trigger Alert", "Yes" if latest_pullback.get("trigger_alert") else "No")
+                    with lp_cols[3]:
+                        st.metric("Touched SMA20", "Yes" if latest_pullback.get("touched_sma20") else "No")
+                    st.caption(f"Reset Reason: **{latest_pullback.get('reset_reason', '—')}**")
                     st.json(latest_pullback)
 
                 # Alert panel.
@@ -642,6 +731,7 @@ def sessions_page():
                     provider = st.selectbox("Provider", PROVIDERS, index=0)
                     timeframe = st.selectbox("Timeframe", TIMEFRAMES, index=0)
                 with col2:
+                    sec_type = st.selectbox("Sec Type", SEC_TYPES, index=0)
                     hysteresis_k = st.number_input("Hysteresis K", min_value=1, value=2, step=1)
                     persistence_window = st.number_input("Persistence Window", min_value=5, value=20, step=1)
                 bottom_col1, bottom_col2 = st.columns(2)
@@ -660,6 +750,7 @@ def sessions_page():
                                 symbol=symbol,
                                 provider=provider,
                                 timeframe=timeframe,
+                                sec_type=sec_type,
                                 hysteresis_k=int(hysteresis_k),
                                 persistence_window=int(persistence_window),
                                 persistence_threshold=int(persistence_threshold),
@@ -736,9 +827,9 @@ def sessions_page():
                     unsafe_allow_html=True,
                 )
             with detail_cols[3]:
-                st.metric("Consec. Count", sess["consecutive_count"])
+                st.metric("Sec Type", sess.get("sec_type", "STK"))
             with detail_cols[4]:
-                st.metric("Hysteresis K", sess["hysteresis_k"])
+                st.metric("Consec. Count", sess["consecutive_count"])
 
             param_cols = st.columns(4)
             with param_cols[0]:
@@ -782,7 +873,7 @@ def sessions_page():
                 if status != "ACTIVE":
                     if st.button("▶ Start", key=f"start_{sid}", use_container_width=True):
                         try:
-                            api_client.start_session(sid)
+                            api_client.start_session(sid, sec_type=sess.get("sec_type"))
                             st.session_state.pop(f"paused_elapsed_{sid}", None)
                             st.rerun()
                         except APIError as e:
@@ -850,6 +941,14 @@ def sessions_page():
                             else 0,
                             key=f"provider_{sid}",
                         )
+                        new_sec_type = st.selectbox(
+                            "Sec Type",
+                            SEC_TYPES,
+                            index=SEC_TYPES.index(sess.get("sec_type", "STK"))
+                            if sess.get("sec_type", "STK") in SEC_TYPES
+                            else 0,
+                            key=f"sec_type_{sid}",
+                        )
                         new_tf = st.selectbox(
                             "Timeframe",
                             TIMEFRAMES,
@@ -876,6 +975,7 @@ def sessions_page():
                                 api_client.update_session(
                                     sid,
                                     provider=new_provider,
+                                    sec_type=new_sec_type,
                                     timeframe=new_tf,
                                     hysteresis_k=int(new_hk),
                                     persistence_window=int(new_pw),

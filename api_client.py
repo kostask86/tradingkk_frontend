@@ -30,6 +30,7 @@ def create_session(
     symbol: str,
     provider: str = "IBKR",
     timeframe: str = "1m",
+    sec_type: str = "STK",
     hysteresis_k: int = 2,
     persistence_window: int = 20,
     persistence_threshold: int = 15,
@@ -39,6 +40,7 @@ def create_session(
         "symbol": symbol.upper().strip(),
         "provider": provider,
         "timeframe": timeframe,
+        "sec_type": sec_type,
         "hysteresis_k": hysteresis_k,
         "persistence_window": persistence_window,
         "persistence_threshold": persistence_threshold,
@@ -77,8 +79,11 @@ def update_session(session_id: int, **fields) -> dict:
     return _handle_response(resp)
 
 
-def start_session(session_id: int) -> dict:
-    resp = requests.post(f"{BASE_URL}/api/sessions/start", params={"session_id": session_id})
+def start_session(session_id: int, sec_type: Optional[str] = None) -> dict:
+    params: dict = {"session_id": session_id}
+    if sec_type:
+        params["sec_type"] = sec_type
+    resp = requests.post(f"{BASE_URL}/api/sessions/start", params=params)
     return _handle_response(resp)
 
 
