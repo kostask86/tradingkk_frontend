@@ -124,6 +124,8 @@ def sessions_page():
         with right_col:
             with st.container(border=True):
                 st.markdown("##### 🕒 Session Clock")
+                if st.button("↻ Refresh", key="session_clock_refresh", type="secondary", use_container_width=True):
+                    st.rerun()
                 try:
                     clock_sessions = api_client.list_sessions(limit=200, offset=0)
                 except Exception:
@@ -892,7 +894,7 @@ def sessions_page():
 
 # ── Provider page ─────────────────────────────────────────────────────
 
-SEC_TYPES = ["STK", "FOREX"]
+SEC_TYPES = ["STK", "FOREX", "SPOT"]
 
 def provider_page():
     st.header("Provider Gateway")
