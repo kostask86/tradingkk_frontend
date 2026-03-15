@@ -5,8 +5,9 @@ from datetime import datetime, timezone
 
 TIMEFRAMES = ["1m", "15m", "30m", "1h", "4h"]
 PROVIDERS = ["IBKR", "BYBIT"]
-ALERT_STATUSES = ["OPEN", "CANCELLED", "FILLED", "EXPIRED"]
+ALERT_STATUSES = ["OPEN", "TP_HIT", "SL_HIT", "CANCELED"]
 ALERT_DIRECTIONS = ["LONG", "SHORT"]
+ALERT_TYPES = ["PREALERT", "TRIGGER_ALERT"]
 STATUS_COLORS = {
     "ACTIVE": "🟢",
     "PAUSED": "🟡",
@@ -402,14 +403,24 @@ def sessions_page():
                             for i in data.get("bear_bar_indices", [])
                             if isinstance(i, (int, float)) or (isinstance(i, str) and i.isdigit())
                         }
+                        persistence_window = session.get("persistence_window")
+                        try:
+                            persistence_window = int(persistence_window)
+                        except (TypeError, ValueError):
+                            persistence_window = 0
+                        max_bar_index = int(chart_df["bar_index"].max())
+                        marker_min_index = (
+                            max_bar_index - persistence_window + 1
+                            if persistence_window and persistence_window > 0
+                            else max_bar_index + 1
+                        )
 
                         def _resolve_candle_color(row):
                             idx = int(row["bar_index"])
-                            if idx in bull_indices:
-                                return "#00e676"
-                            if idx in bear_indices:
-                                return "#ff1744"
-                            return "#2ca02c" if row["close"] >= row["open"] else "#d62728"
+                            is_bull = row["close"] >= row["open"]
+                            if idx >= marker_min_index:
+                                return "#39ff14" if is_bull else "#ff073a"
+                            return "#2ca02c" if is_bull else "#d62728"
 
                         chart_df["candle_color"] = chart_df.apply(_resolve_candle_color, axis=1)
 
@@ -430,16 +441,6 @@ def sessions_page():
 
                         highlight_rows = []
                         if bull_indices or bear_indices:
-                            persistence_window = session.get("persistence_window")
-                            try:
-                                persistence_window = int(persistence_window)
-                            except (TypeError, ValueError):
-                                persistence_window = 0
-                            max_bar_index = int(chart_df["bar_index"].max())
-                            marker_min_index = (
-                                max_bar_index - persistence_window + 1 if persistence_window and persistence_window > 0 else 0
-                            )
-
                             for _, row in chart_df.iterrows():
                                 idx = int(row["bar_index"])
                                 if idx < marker_min_index:
@@ -469,7 +470,7 @@ def sessions_page():
                                 y=alt.Y("price:Q", scale=price_scale),
                                 color=alt.Color(
                                     "label:N",
-                                    scale=alt.Scale(domain=["Bull Index", "Bear Index"], range=["#00e676", "#ff1744"]),
+                                    scale=alt.Scale(domain=["Bull Index", "Bear Index"], range=["#00ff00", "#ff0033"]),
                                     legend=alt.Legend(title="Bar Highlights"),
                                 ),
                             )
@@ -547,7 +548,7 @@ def sessions_page():
                                     chart = chart + line
 
                         st.caption(
-                            "Legend: Candles + SMA9/SMA20 | Bright green/red candles: Bull/Bear index highlights | "
+                            "Legend: Candles + SMA9/SMA20 | Neon candles: actual open/close direction | "
                             "Small circle markers: Bull/Bear index points | Purple band: ATR14 hint | "
                             "Swing markers: High/Low | Alert lines: Entry/Stop/Target"
                         )
@@ -629,16 +630,18 @@ def sessions_page():
                 st.markdown("### Alert")
                 latest_alert = data.get("latest_alert")
                 if latest_alert:
-                    alert_cols = st.columns(4)
+                    alert_cols = st.columns(5)
                     with alert_cols[0]:
                         st.metric("Direction", latest_alert.get("direction", "—"))
                     with alert_cols[1]:
-                        st.metric("Entry", latest_alert.get("entry_signal_price", "—"))
+                        st.metric("Type", latest_alert.get("type", "—"))
                     with alert_cols[2]:
-                        st.metric("Stop", latest_alert.get("stop_price", "—"))
+                        st.metric("Entry", latest_alert.get("entry_signal_price", "—"))
                     with alert_cols[3]:
+                        st.metric("Stop", latest_alert.get("stop_price", "—"))
+                    with alert_cols[4]:
                         st.metric("Target", latest_alert.get("target_price", "—"))
-                    st.caption(f"Status: {latest_alert.get('status', '—')}")
+                    st.caption(f"Outcome Status: {latest_alert.get('outcome_status', '—')}")
                 else:
                     st.info("No latest alert available.")
 
@@ -647,7 +650,7 @@ def sessions_page():
 
         with st.container(border=True):
             st.markdown("**List Alerts**")
-            list_cols = st.columns(4)
+            list_cols = st.columns(5)
             with list_cols[0]:
                 al_status_filter = st.selectbox("Status", ["All"] + ALERT_STATUSES, index=0, key="al_list_status")
             with list_cols[1]:
@@ -655,15 +658,18 @@ def sessions_page():
                     "Direction", ["All"] + ALERT_DIRECTIONS, index=0, key="al_list_direction"
                 )
             with list_cols[2]:
-                al_limit = st.number_input("Limit", min_value=1, max_value=1000, value=100, step=10, key="al_list_limit")
+                al_type_filter = st.selectbox("Type", ["All"] + ALERT_TYPES, index=0, key="al_list_type")
             with list_cols[3]:
+                al_limit = st.number_input("Limit", min_value=1, max_value=1000, value=100, step=10, key="al_list_limit")
+            with list_cols[4]:
                 al_offset = st.number_input("Offset", min_value=0, value=0, step=10, key="al_list_offset")
 
             if st.button("Get Alerts", use_container_width=True, key="al_get_list"):
                 try:
                     alerts = api_client.list_alerts(
-                        status=al_status_filter if al_status_filter != "All" else None,
+                        outcome_status=al_status_filter if al_status_filter != "All" else None,
                         direction=al_direction_filter if al_direction_filter != "All" else None,
+                        type=al_type_filter if al_type_filter != "All" else None,
                         limit=int(al_limit),
                         offset=int(al_offset),
                     )
@@ -719,7 +725,96 @@ def sessions_page():
 
             if "alert_detail" in st.session_state:
                 st.markdown("**Alert Detail**")
-                st.json(st.session_state["alert_detail"])
+                ad = st.session_state["alert_detail"]
+                detail_cols = st.columns(5)
+                with detail_cols[0]:
+                    st.metric("Direction", ad.get("direction", "—"))
+                with detail_cols[1]:
+                    st.metric("Type", ad.get("type", "—"))
+                with detail_cols[2]:
+                    st.metric("Outcome Status", ad.get("outcome_status", "—"))
+                with detail_cols[3]:
+                    st.metric("Entry", ad.get("entry_signal_price", "—"))
+                with detail_cols[4]:
+                    st.metric("Stop", ad.get("stop_price", "—"))
+                st.json(ad)
+
+        with st.container(border=True):
+            st.markdown("**Cancel Alerts For Session**")
+            cancel_cols = st.columns([3, 2])
+            with cancel_cols[0]:
+                cancel_session_id = st.number_input(
+                    "Session ID (Cancel Alerts)",
+                    min_value=1,
+                    value=1,
+                    step=1,
+                    key="alerts_cancel_session_id",
+                )
+            with cancel_cols[1]:
+                st.write("")
+                if st.button(
+                    "Cancel Session Alerts",
+                    use_container_width=True,
+                    key="alerts_cancel_session_btn",
+                    type="primary",
+                ):
+                    try:
+                        api_client.cancel_session_alerts(int(cancel_session_id))
+                        st.success(f"Canceled alerts for session #{int(cancel_session_id)}.")
+                    except APIError as e:
+                        st.error(f"Failed to cancel alerts for session: {e.detail}")
+                    except Exception as e:
+                        st.error(f"Connection error: {e}")
+
+        with st.container(border=True):
+            st.markdown("**Alert Performance By Session**")
+            perf_cols = st.columns([3, 2])
+            with perf_cols[0]:
+                perf_session_id = st.number_input(
+                    "Session ID (Alert Performance)",
+                    min_value=1,
+                    value=1,
+                    step=1,
+                    key="alerts_perf_session_id",
+                )
+            with perf_cols[1]:
+                st.write("")
+                if st.button(
+                    "Get Alert Performance",
+                    use_container_width=True,
+                    key="alerts_get_performance_btn",
+                ):
+                    try:
+                        st.session_state["alerts_performance"] = api_client.get_alert_performance(int(perf_session_id))
+                    except APIError as e:
+                        st.error(f"Failed to get alert performance: {e.detail}")
+                    except Exception as e:
+                        st.error(f"Connection error: {e}")
+
+            if "alerts_performance" in st.session_state:
+                perf = st.session_state["alerts_performance"]
+                perf_metrics_1 = st.columns(5)
+                with perf_metrics_1[0]:
+                    st.metric("Total Alerts", perf.get("total_alerts", 0))
+                with perf_metrics_1[1]:
+                    st.metric("PREALERTs", perf.get("no_pre_alerts", 0))
+                with perf_metrics_1[2]:
+                    st.metric("Trigger Alerts", perf.get("no_trigger_alerts", 0))
+                with perf_metrics_1[3]:
+                    st.metric("TP Hits", perf.get("tp_hits", 0))
+                with perf_metrics_1[4]:
+                    st.metric("SL Hits", perf.get("sl_hits", 0))
+
+                perf_metrics_2 = st.columns(4)
+                with perf_metrics_2[0]:
+                    st.metric("Canceled", perf.get("canceled", 0))
+                with perf_metrics_2[1]:
+                    st.metric("Open", perf.get("open", 0))
+                with perf_metrics_2[2]:
+                    st.metric("Win Rate", f"{float(perf.get('win_rate', 0)):.2f}%")
+                with perf_metrics_2[3]:
+                    st.metric("Session ID", perf.get("session_id", "—"))
+                st.json(perf)
 
     with sessions_tab:
         # ── Create session form ───────────────────────────────────────
@@ -727,11 +822,19 @@ def sessions_page():
             with st.form("create_session_form"):
                 col1, col2 = st.columns(2)
                 with col1:
-                    symbol = st.text_input("Symbol", placeholder="e.g. AAPL, EURUSD")
-                    provider = st.selectbox("Provider", PROVIDERS, index=0)
+                    symbol = st.text_input("Symbol", value="BTCUSDT", placeholder="e.g. AAPL, EURUSD")
+                    provider = st.selectbox(
+                        "Provider",
+                        PROVIDERS,
+                        index=PROVIDERS.index("BYBIT") if "BYBIT" in PROVIDERS else 0,
+                    )
                     timeframe = st.selectbox("Timeframe", TIMEFRAMES, index=0)
                 with col2:
-                    sec_type = st.selectbox("Sec Type", SEC_TYPES, index=0)
+                    sec_type = st.selectbox(
+                        "Sec Type",
+                        SEC_TYPES,
+                        index=SEC_TYPES.index("SPOT") if "SPOT" in SEC_TYPES else 0,
+                    )
                     hysteresis_k = st.number_input("Hysteresis K", min_value=1, value=2, step=1)
                     persistence_window = st.number_input("Persistence Window", min_value=5, value=20, step=1)
                 bottom_col1, bottom_col2 = st.columns(2)

@@ -105,6 +105,14 @@ def visualize_session(session_id: int, num_bars: int = 200) -> dict:
     return _handle_response(resp)
 
 
+def get_alert_performance(session_id: int) -> dict:
+    resp = requests.get(
+        f"{BASE_URL}/api/sessions/alert_performance",
+        params={"session_id": session_id},
+    )
+    return _handle_response(resp)
+
+
 def delete_session(session_id: int) -> None:
     resp = requests.delete(f"{BASE_URL}/api/sessions/", params={"session_id": session_id})
     return _handle_response(resp, 204)
@@ -180,18 +188,21 @@ def create_alert(
 
 def list_alerts(
     session_id: Optional[int] = None,
-    status: Optional[str] = None,
+    outcome_status: Optional[str] = None,
     direction: Optional[str] = None,
+    type: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[dict]:
     params: dict = {"limit": limit, "offset": offset}
     if session_id is not None:
         params["session_id"] = session_id
-    if status:
-        params["status"] = status
+    if outcome_status:
+        params["outcome_status"] = outcome_status
     if direction:
         params["direction"] = direction
+    if type:
+        params["type"] = type
     resp = requests.get(f"{BASE_URL}/api/alerts/", params=params)
     return _handle_response(resp)
 
@@ -204,6 +215,14 @@ def get_alert(alert_id: int) -> dict:
 def delete_alert(alert_id: int) -> None:
     resp = requests.delete(f"{BASE_URL}/api/alerts/", params={"alert_id": alert_id})
     return _handle_response(resp, 204)
+
+
+def cancel_session_alerts(session_id: int) -> dict:
+    resp = requests.post(
+        f"{BASE_URL}/api/sessions/cancel-alerts",
+        params={"session_id": session_id},
+    )
+    return _handle_response(resp)
 
 
 # ── Provider ──────────────────────────────────────────────────────────
