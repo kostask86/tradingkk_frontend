@@ -113,6 +113,11 @@ def get_alert_performance(session_id: int) -> dict:
     return _handle_response(resp)
 
 
+def get_session_metadata() -> dict:
+    resp = requests.get(f"{BASE_URL}/api/sessions/metadata")
+    return _handle_response(resp)
+
+
 def delete_session(session_id: int) -> None:
     resp = requests.delete(f"{BASE_URL}/api/sessions/", params={"session_id": session_id})
     return _handle_response(resp, 204)

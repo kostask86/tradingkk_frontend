@@ -534,18 +534,20 @@ def sessions_page():
                         # Latest alert entry/stop/target lines.
                         latest_alert = data.get("latest_alert")
                         if isinstance(latest_alert, dict):
-                            for field, color in [
-                                ("entry_signal_price", "#00c853"),
-                                ("stop_price", "#d50000"),
-                                ("target_price", "#2962ff"),
-                            ]:
-                                val = latest_alert.get(field)
-                                if val is not None:
-                                    line_df = pd.DataFrame([{"y": float(val)}])
-                                    line = alt.Chart(line_df).mark_rule(color=color, strokeDash=[6, 3]).encode(
-                                        y=alt.Y("y:Q", scale=price_scale)
-                                    )
-                                    chart = chart + line
+                            alert_is_open = latest_alert.get("outcome_status") == "OPEN"
+                            if alert_is_open:
+                                for field, color in [
+                                    ("entry_signal_price", "#00c853"),
+                                    ("stop_price", "#d50000"),
+                                    ("target_price", "#2962ff"),
+                                ]:
+                                    val = latest_alert.get(field)
+                                    if val is not None:
+                                        line_df = pd.DataFrame([{"y": float(val)}])
+                                        line = alt.Chart(line_df).mark_rule(color=color, strokeDash=[6, 3]).encode(
+                                            y=alt.Y("y:Q", scale=price_scale)
+                                        )
+                                        chart = chart + line
 
                         st.caption(
                             "Legend: Candles + SMA9/SMA20 | Neon candles: actual open/close direction | "
@@ -686,7 +688,22 @@ def sessions_page():
                 alerts_df = pd.DataFrame(st.session_state["alerts_list"])
                 if "created_at" in alerts_df.columns:
                     alerts_df["created_at"] = alerts_df["created_at"].apply(_fmt_dt)
-                st.dataframe(alerts_df, use_container_width=True, hide_index=True)
+                preferred_cols = [
+                    "id",
+                    "session_id",
+                    "created_at",
+                    "direction",
+                    "type",
+                    "outcome_status",
+                    "entry_signal_price",
+                    "stop_price",
+                    "target_price",
+                    "reason",
+                ]
+                display_cols = [c for c in preferred_cols if c in alerts_df.columns] + [
+                    c for c in alerts_df.columns if c not in preferred_cols
+                ]
+                st.dataframe(alerts_df[display_cols], use_container_width=True, hide_index=True)
 
         with st.container(border=True):
             st.markdown("**Get One / Delete One**")
@@ -817,6 +834,31 @@ def sessions_page():
                 st.json(perf)
 
     with sessions_tab:
+        with st.container(border=True):
+            st.markdown("**Session Metadata**")
+            if st.button("Get Metadata", use_container_width=True, key="session_get_metadata_btn"):
+                try:
+                    st.session_state["session_metadata"] = api_client.get_session_metadata()
+                except APIError as e:
+                    st.error(f"Failed to get metadata: {e.detail}")
+                except Exception as e:
+                    st.error(f"Connection error: {e}")
+
+            if "session_metadata" in st.session_state:
+                metadata = st.session_state["session_metadata"]
+                md_cols = st.columns(5)
+                with md_cols[0]:
+                    st.metric("max_pullback_depth_atr", metadata.get("max_pullback_depth_atr", "—"))
+                with md_cols[1]:
+                    st.metric("max_pullback_duration_bars", metadata.get("max_pullback_duration_bars", "—"))
+                with md_cols[2]:
+                    st.metric("min_pullback_depth_atr", metadata.get("min_pullback_depth_atr", "—"))
+                with md_cols[3]:
+                    st.metric("sma20_touch_band_atr", metadata.get("sma20_touch_band_atr", "—"))
+                with md_cols[4]:
+                    st.metric("strong_close_max_wick_ratio", metadata.get("strong_close_max_wick_ratio", "—"))
+                st.json(metadata)
+
         # ── Create session form ───────────────────────────────────────
         with st.expander("➕ Create new session", expanded=False):
             with st.form("create_session_form"):
