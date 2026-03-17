@@ -3,7 +3,7 @@ import api_client
 from api_client import APIError
 from datetime import datetime, timezone
 
-TIMEFRAMES = ["1m", "15m", "30m", "1h", "4h"]
+TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h"]
 PROVIDERS = ["IBKR", "BYBIT"]
 ALERT_STATUSES = ["OPEN", "TP_HIT", "SL_HIT", "CANCELED"]
 ALERT_DIRECTIONS = ["LONG", "SHORT"]
@@ -37,18 +37,49 @@ st.markdown(
     div[data-testid="stSidebar"] {
         background: #0e1117;
     }
+    .system-clock-widget {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        z-index: 9999;
+        background: rgba(14, 17, 23, 0.92);
+        border: 1px solid rgba(151, 166, 195, 0.35);
+        border-radius: 10px;
+        padding: 8px 10px;
+        min-width: 132px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    }
+    .system-clock-label {
+        font-size: 11px;
+        line-height: 1.1;
+        color: #9aa0a6;
+        margin-bottom: 2px;
+    }
+    .system-clock-time {
+        font-size: 18px;
+        line-height: 1.15;
+        font-weight: 700;
+        color: #e8eaed;
+        font-variant-numeric: tabular-nums;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 
-def _fmt_dt(val: str | None) -> str:
+def _fmt_dt(val) -> str:
     if not val:
         return "—"
     try:
-        dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
-        return dt.strftime("%Y-%m-%d %H:%M:%S")
+        if isinstance(val, datetime):
+            dt = val
+        else:
+            dt = datetime.fromisoformat(str(val).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        dt_utc = dt.astimezone(timezone.utc)
+        return dt_utc.strftime("%Y-%m-%d %H:%M:%S UTC")
     except Exception:
         return str(val)
 
@@ -89,6 +120,22 @@ def _format_hms(total_seconds: int) -> str:
     minutes = (total_seconds % 3600) // 60
     seconds = total_seconds % 60
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+@st.fragment(run_every="1s")
+def _system_clock_widget() -> None:
+    now_utc = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
+    st.markdown(
+        f"""
+        <div style="height:0;">
+            <div class="system-clock-widget">
+                <div class="system-clock-label">System Clock</div>
+                <div class="system-clock-time">{now_utc}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────
@@ -372,6 +419,16 @@ def sessions_page():
             data = st.session_state["session_visualization_result"]
             session = data.get("session", {})
             bars = data.get("bars", [])
+            session_alerts = []
+            if session.get("id") is not None:
+                try:
+                    session_alerts = api_client.list_alerts(
+                        session_id=int(session.get("id")),
+                        limit=1000,
+                        offset=0,
+                    )
+                except Exception:
+                    session_alerts = []
 
             with st.container(border=True):
                 st.markdown(
@@ -437,14 +494,15 @@ def sessions_page():
                         chart_df["candle_color"] = chart_df.apply(_resolve_candle_color, axis=1)
 
                         price_scale = alt.Scale(zero=False)
+                        x_scale_utc = alt.Scale(type="utc")
                         wick = alt.Chart(chart_df).mark_rule().encode(
-                            x=alt.X("date:T", title="Time"),
+                            x=alt.X("date:T", title="Time (UTC)", scale=x_scale_utc),
                             y=alt.Y("low:Q", title="Price", scale=price_scale),
                             y2="high:Q",
                             color=alt.value("#9aa0a6"),
                         )
                         candle = alt.Chart(chart_df).mark_bar(size=8).encode(
-                            x=alt.X("date:T"),
+                            x=alt.X("date:T", scale=x_scale_utc),
                             y=alt.Y("candle_low:Q", scale=price_scale),
                             y2="candle_high:Q",
                             color=alt.Color("candle_color:N", scale=None, legend=None),
@@ -478,7 +536,7 @@ def sessions_page():
                             highlight_markers = alt.Chart(highlights_df).mark_point(
                                 filled=True, size=70, shape="circle", stroke="black", strokeWidth=0.8, opacity=0.9
                             ).encode(
-                                x="date:T",
+                                x=alt.X("date:T", scale=x_scale_utc),
                                 y=alt.Y("price:Q", scale=price_scale),
                                 color=alt.Color(
                                     "label:N",
@@ -490,12 +548,12 @@ def sessions_page():
 
                         if "sma9" in chart_df.columns and chart_df["sma9"].notna().any():
                             chart = chart + alt.Chart(chart_df).mark_line(color="#1f77b4", strokeWidth=2).encode(
-                                x="date:T",
+                                x=alt.X("date:T", scale=x_scale_utc),
                                 y=alt.Y("sma9:Q", scale=price_scale),
                             )
                         if "sma20" in chart_df.columns and chart_df["sma20"].notna().any():
                             chart = chart + alt.Chart(chart_df).mark_line(color="#ff7f0e", strokeWidth=2).encode(
-                                x="date:T",
+                                x=alt.X("date:T", scale=x_scale_utc),
                                 y=alt.Y("sma20:Q", scale=price_scale),
                             )
 
@@ -505,7 +563,7 @@ def sessions_page():
                             atr_hint_df["atr_upper"] = atr_hint_df["close"] + atr_hint_df["atr14"]
                             atr_hint_df["atr_lower"] = atr_hint_df["close"] - atr_hint_df["atr14"]
                             atr_band = alt.Chart(atr_hint_df).mark_area(opacity=0.12, color="#9c27b0").encode(
-                                x="date:T",
+                                x=alt.X("date:T", scale=x_scale_utc),
                                 y=alt.Y("atr_lower:Q", scale=price_scale),
                                 y2="atr_upper:Q",
                             )
@@ -528,7 +586,7 @@ def sessions_page():
                                     markers = alt.Chart(marker_df).mark_point(
                                         filled=True, size=280, stroke="black", strokeWidth=1.5, opacity=0.95
                                     ).encode(
-                                        x="date:T",
+                                        x=alt.X("date:T", scale=x_scale_utc),
                                         y=alt.Y("price:Q", scale=price_scale),
                                         color=alt.Color(
                                             "type:N",
@@ -561,10 +619,50 @@ def sessions_page():
                                         )
                                         chart = chart + line
 
+                        # Vertical dotted lines for all session alerts (PREALERT + TRIGGER_ALERT).
+                        if session_alerts:
+                            alerts_df = pd.DataFrame(session_alerts)
+                            if {"created_at", "direction"}.issubset(alerts_df.columns):
+                                alerts_df["alert_time"] = pd.to_datetime(alerts_df["created_at"], errors="coerce")
+                                alerts_df = alerts_df.dropna(subset=["alert_time"])
+                                if not chart_df.empty and "date" in chart_df.columns:
+                                    alerts_df["alert_time"] = pd.to_datetime(
+                                        alerts_df["alert_time"], errors="coerce", utc=True
+                                    ).dt.tz_localize(None)
+                                    chart_times = pd.to_datetime(chart_df["date"], errors="coerce", utc=True).dt.tz_localize(
+                                        None
+                                    )
+                                    min_chart_time = chart_times.min()
+                                    max_chart_time = chart_times.max()
+                                    alerts_df = alerts_df[
+                                        (alerts_df["alert_time"] >= min_chart_time)
+                                        & (alerts_df["alert_time"] <= max_chart_time)
+                                    ]
+                                if not alerts_df.empty:
+                                    alert_vlines = alt.Chart(alerts_df).mark_rule(
+                                        strokeDash=[4, 4], strokeWidth=1.6, opacity=0.95
+                                    ).encode(
+                                        x=alt.X("alert_time:T", scale=x_scale_utc),
+                                        color=alt.Color(
+                                            "direction:N",
+                                            scale=alt.Scale(domain=["LONG", "SHORT"], range=["#39ff14", "#ff073a"]),
+                                            legend=alt.Legend(title="Alert Direction"),
+                                        ),
+                                        tooltip=[
+                                            alt.Tooltip("id:Q", title="Alert ID"),
+                                            alt.Tooltip("type:N", title="Type"),
+                                            alt.Tooltip("direction:N", title="Direction"),
+                                            alt.Tooltip("outcome_status:N", title="Outcome"),
+                                            alt.Tooltip("alert_time:T", title="Time"),
+                                        ],
+                                    )
+                                    chart = chart + alert_vlines
+
                         st.caption(
                             "Legend: Candles + SMA9/SMA20 | Neon candles: actual open/close direction | "
                             "Small circle markers: Bull/Bear index points | Purple band: ATR14 hint | "
-                            "Swing markers: High/Low | Alert lines: Entry/Stop/Target"
+                            "Swing markers: High/Low | Alert lines: Entry/Stop/Target | "
+                            "Dotted vertical lines: Alerts (LONG green / SHORT red)"
                         )
                         st.altair_chart(chart.properties(height=420), use_container_width=True)
                     else:
@@ -664,23 +762,34 @@ def sessions_page():
 
         with st.container(border=True):
             st.markdown("**List Alerts**")
-            list_cols = st.columns(5)
+            list_cols = st.columns(6)
             with list_cols[0]:
-                al_status_filter = st.selectbox("Status", ["All"] + ALERT_STATUSES, index=0, key="al_list_status")
+                al_session_id_filter = st.text_input(
+                    "Session ID (optional)",
+                    value="",
+                    placeholder="e.g. 12",
+                    key="al_list_session_id",
+                )
             with list_cols[1]:
+                al_status_filter = st.selectbox("Status", ["All"] + ALERT_STATUSES, index=0, key="al_list_status")
+            with list_cols[2]:
                 al_direction_filter = st.selectbox(
                     "Direction", ["All"] + ALERT_DIRECTIONS, index=0, key="al_list_direction"
                 )
-            with list_cols[2]:
-                al_type_filter = st.selectbox("Type", ["All"] + ALERT_TYPES, index=0, key="al_list_type")
             with list_cols[3]:
-                al_limit = st.number_input("Limit", min_value=1, max_value=1000, value=100, step=10, key="al_list_limit")
+                al_type_filter = st.selectbox("Type", ["All"] + ALERT_TYPES, index=0, key="al_list_type")
             with list_cols[4]:
+                al_limit = st.number_input("Limit", min_value=1, max_value=1000, value=100, step=10, key="al_list_limit")
+            with list_cols[5]:
                 al_offset = st.number_input("Offset", min_value=0, value=0, step=10, key="al_list_offset")
 
             if st.button("Get Alerts", use_container_width=True, key="al_get_list"):
                 try:
+                    session_id_filter = None
+                    if al_session_id_filter and al_session_id_filter.strip():
+                        session_id_filter = int(al_session_id_filter.strip())
                     alerts = api_client.list_alerts(
+                        session_id=session_id_filter,
                         outcome_status=al_status_filter if al_status_filter != "All" else None,
                         direction=al_direction_filter if al_direction_filter != "All" else None,
                         type=al_type_filter if al_type_filter != "All" else None,
@@ -1202,14 +1311,21 @@ def provider_page():
     st.subheader("Test Bars")
 
     with st.form("test_bar_form"):
-        tb_cols = st.columns(4)
+        tb_cols = st.columns(5)
         with tb_cols[0]:
             tb_symbol = st.text_input("Symbol", placeholder="e.g. AAPL or EURUSD")
         with tb_cols[1]:
-            tb_timeframe = st.selectbox("Timeframe", TIMEFRAMES, index=0)
+            tb_provider = st.selectbox(
+                "Provider",
+                PROVIDERS,
+                index=PROVIDERS.index(selected_provider) if selected_provider in PROVIDERS else 0,
+                key="tb_provider",
+            )
         with tb_cols[2]:
-            tb_sec_type = st.selectbox("Security Type", SEC_TYPES, index=0)
+            tb_timeframe = st.selectbox("Timeframe", TIMEFRAMES, index=0)
         with tb_cols[3]:
+            tb_sec_type = st.selectbox("Security Type", SEC_TYPES, index=0)
+        with tb_cols[4]:
             tb_num_bars = st.number_input("Num Bars", min_value=5, max_value=200, value=20, step=5)
 
         tb_submitted = st.form_submit_button("Fetch Test Bar", use_container_width=True)
@@ -1220,7 +1336,7 @@ def provider_page():
                 try:
                     bar_data = api_client.get_test_bars(
                         symbol=tb_symbol,
-                        provider=selected_provider,
+                        provider=tb_provider,
                         timeframe=tb_timeframe,
                         sec_type=tb_sec_type,
                         num_bars=int(tb_num_bars),
@@ -1325,16 +1441,17 @@ def provider_page():
                     )
 
                     price_scale = alt.Scale(zero=False)
+                    x_scale_utc = alt.Scale(type="utc")
 
                     wick = alt.Chart(chart_df).mark_rule().encode(
-                        x=alt.X("date:T", title="Time"),
+                        x=alt.X("date:T", title="Time (UTC)", scale=x_scale_utc),
                         y=alt.Y("low:Q", title="Price", scale=price_scale),
                         y2="high:Q",
                         color=alt.value("#9aa0a6"),
                     )
 
                     candle = alt.Chart(chart_df).mark_bar(size=8).encode(
-                        x=alt.X("date:T"),
+                        x=alt.X("date:T", scale=x_scale_utc),
                         y=alt.Y("candle_low:Q", scale=price_scale),
                         y2="candle_high:Q",
                         color=alt.Color("candle_color:N", scale=None, legend=None),
@@ -1344,14 +1461,14 @@ def provider_page():
 
                     if "sma9" in chart_df.columns and chart_df["sma9"].notna().any():
                         sma9_line = alt.Chart(chart_df).mark_line(color="#1f77b4", strokeWidth=2).encode(
-                            x="date:T",
+                            x=alt.X("date:T", scale=x_scale_utc),
                             y=alt.Y("sma9:Q", scale=price_scale),
                         )
                         chart = chart + sma9_line
 
                     if "sma20" in chart_df.columns and chart_df["sma20"].notna().any():
                         sma20_line = alt.Chart(chart_df).mark_line(color="#ff7f0e", strokeWidth=2).encode(
-                            x="date:T",
+                            x=alt.X("date:T", scale=x_scale_utc),
                             y=alt.Y("sma20:Q", scale=price_scale),
                         )
                         chart = chart + sma20_line
@@ -1359,7 +1476,7 @@ def provider_page():
                     if "atr14" in chart_df.columns and chart_df["atr14"].notna().any():
                         atr_df = chart_df.dropna(subset=["atr14"]).copy()
                         atr_chart = alt.Chart(atr_df).mark_line(color="#9c27b0", strokeWidth=2).encode(
-                            x=alt.X("date:T", title="Time"),
+                            x=alt.X("date:T", title="Time (UTC)", scale=x_scale_utc),
                             y=alt.Y("atr14:Q", title="ATR14", scale=alt.Scale(zero=False)),
                         )
                         st.altair_chart(
@@ -1380,14 +1497,21 @@ def provider_page():
     st.subheader("Detect Swings")
 
     with st.form("detect_swings_form"):
-        sw_cols = st.columns(4)
+        sw_cols = st.columns(5)
         with sw_cols[0]:
             sw_symbol = st.text_input("Symbol", placeholder="e.g. AAPL or EURUSD", key="sw_symbol")
         with sw_cols[1]:
-            sw_timeframe = st.selectbox("Timeframe", TIMEFRAMES, index=0, key="sw_tf")
+            sw_provider = st.selectbox(
+                "Provider",
+                PROVIDERS,
+                index=PROVIDERS.index(selected_provider) if selected_provider in PROVIDERS else 0,
+                key="sw_provider",
+            )
         with sw_cols[2]:
-            sw_sec_type = st.selectbox("Security Type", SEC_TYPES, index=0, key="sw_sec")
+            sw_timeframe = st.selectbox("Timeframe", TIMEFRAMES, index=0, key="sw_tf")
         with sw_cols[3]:
+            sw_sec_type = st.selectbox("Security Type", SEC_TYPES, index=0, key="sw_sec")
+        with sw_cols[4]:
             sw_lookback = st.number_input("Lookback", min_value=1, max_value=10, value=2, step=1, key="sw_lb")
 
         sw_submitted = st.form_submit_button("Detect Swings", use_container_width=True)
@@ -1398,7 +1522,7 @@ def provider_page():
                 try:
                     swing_data = api_client.detect_swings(
                         symbol=sw_symbol,
-                        provider=selected_provider,
+                        provider=sw_provider,
                         timeframe=sw_timeframe,
                         sec_type=sw_sec_type,
                         lookback=int(sw_lookback),
@@ -1409,7 +1533,7 @@ def provider_page():
                         chart_bars = max(1, min(200, chart_bars))
                         swing_bars_data = api_client.get_test_bars(
                             symbol=sw_symbol,
-                            provider=selected_provider,
+                            provider=sw_provider,
                             timeframe=sw_timeframe,
                             sec_type=sw_sec_type,
                             num_bars=chart_bars,
@@ -1483,16 +1607,17 @@ def provider_page():
                         )
 
                         price_scale = alt.Scale(zero=False)
+                        x_scale_utc = alt.Scale(type="utc")
 
                         wick = alt.Chart(chart_df).mark_rule().encode(
-                            x=alt.X("date:T", title="Time"),
+                            x=alt.X("date:T", title="Time (UTC)", scale=x_scale_utc),
                             y=alt.Y("low:Q", title="Price", scale=price_scale),
                             y2="high:Q",
                             color=alt.value("#9aa0a6"),
                         )
 
                         candle = alt.Chart(chart_df).mark_bar(size=8).encode(
-                            x=alt.X("date:T"),
+                            x=alt.X("date:T", scale=x_scale_utc),
                             y=alt.Y("candle_low:Q", scale=price_scale),
                             y2="candle_high:Q",
                             color=alt.Color("candle_color:N", scale=None, legend=None),
@@ -1502,12 +1627,12 @@ def provider_page():
 
                         if "sma9" in chart_df.columns and chart_df["sma9"].notna().any():
                             chart = chart + alt.Chart(chart_df).mark_line(color="#1f77b4", strokeWidth=2).encode(
-                                x="date:T",
+                                x=alt.X("date:T", scale=x_scale_utc),
                                 y=alt.Y("sma9:Q", scale=price_scale),
                             )
                         if "sma20" in chart_df.columns and chart_df["sma20"].notna().any():
                             chart = chart + alt.Chart(chart_df).mark_line(color="#ff7f0e", strokeWidth=2).encode(
-                                x="date:T",
+                                x=alt.X("date:T", scale=x_scale_utc),
                                 y=alt.Y("sma20:Q", scale=price_scale),
                             )
 
@@ -1528,7 +1653,7 @@ def provider_page():
                                     strokeWidth=1.8,
                                     opacity=0.95,
                                 ).encode(
-                                    x="date:T",
+                                    x=alt.X("date:T", scale=x_scale_utc),
                                     y=alt.Y("price:Q", scale=price_scale),
                                     color=alt.Color(
                                         "type:N",
@@ -1555,20 +1680,27 @@ def provider_page():
     st.subheader("Calculate Candidate Bias")
 
     with st.form("calculate_candidate_bias_form"):
-        cb_cols = st.columns(6)
+        cb_cols = st.columns(7)
         with cb_cols[0]:
             cb_symbol = st.text_input("Symbol", placeholder="e.g. AAPL or EURUSD", key="cb_symbol")
         with cb_cols[1]:
-            cb_timeframe = st.selectbox("Timeframe", TIMEFRAMES, index=0, key="cb_tf")
+            cb_provider = st.selectbox(
+                "Provider",
+                PROVIDERS,
+                index=PROVIDERS.index(selected_provider) if selected_provider in PROVIDERS else 0,
+                key="cb_provider",
+            )
         with cb_cols[2]:
-            cb_sec_type = st.selectbox("Security Type", SEC_TYPES, index=0, key="cb_sec")
+            cb_timeframe = st.selectbox("Timeframe", TIMEFRAMES, index=0, key="cb_tf")
         with cb_cols[3]:
-            cb_lookback = st.number_input("Lookback", min_value=1, max_value=10, value=2, step=1, key="cb_lb")
+            cb_sec_type = st.selectbox("Security Type", SEC_TYPES, index=0, key="cb_sec")
         with cb_cols[4]:
+            cb_lookback = st.number_input("Lookback", min_value=1, max_value=10, value=2, step=1, key="cb_lb")
+        with cb_cols[5]:
             cb_pw = st.number_input(
                 "Persistence Window", min_value=5, max_value=200, value=20, step=1, key="cb_pw"
             )
-        with cb_cols[5]:
+        with cb_cols[6]:
             cb_pt = st.number_input(
                 "Persistence Threshold", min_value=1, max_value=200, value=15, step=1, key="cb_pt"
             )
@@ -1581,7 +1713,7 @@ def provider_page():
                 try:
                     cb_result = api_client.calculate_candidate_bias(
                         symbol=cb_symbol,
-                        provider=selected_provider,
+                        provider=cb_provider,
                         timeframe=cb_timeframe,
                         sec_type=cb_sec_type,
                         lookback=int(cb_lookback),
@@ -1664,16 +1796,17 @@ def provider_page():
                         )
 
                         price_scale = alt.Scale(zero=False)
+                        x_scale_utc = alt.Scale(type="utc")
 
                         wick = alt.Chart(chart_df).mark_rule().encode(
-                            x=alt.X("date:T", title="Time"),
+                            x=alt.X("date:T", title="Time (UTC)", scale=x_scale_utc),
                             y=alt.Y("low:Q", title="Price", scale=price_scale),
                             y2="high:Q",
                             color=alt.value("#9aa0a6"),
                         )
 
                         candle = alt.Chart(chart_df).mark_bar(size=8).encode(
-                            x=alt.X("date:T"),
+                            x=alt.X("date:T", scale=x_scale_utc),
                             y=alt.Y("candle_low:Q", scale=price_scale),
                             y2="candle_high:Q",
                             color=alt.Color("candle_color:N", scale=None, legend=None),
@@ -1683,12 +1816,12 @@ def provider_page():
 
                         if "sma9" in chart_df.columns and chart_df["sma9"].notna().any():
                             chart = chart + alt.Chart(chart_df).mark_line(color="#1f77b4", strokeWidth=2).encode(
-                                x="date:T",
+                                x=alt.X("date:T", scale=x_scale_utc),
                                 y=alt.Y("sma9:Q", scale=price_scale),
                             )
                         if "sma20" in chart_df.columns and chart_df["sma20"].notna().any():
                             chart = chart + alt.Chart(chart_df).mark_line(color="#ff7f0e", strokeWidth=2).encode(
-                                x="date:T",
+                                x=alt.X("date:T", scale=x_scale_utc),
                                 y=alt.Y("sma20:Q", scale=price_scale),
                             )
 
@@ -1709,7 +1842,7 @@ def provider_page():
                                     strokeWidth=1.8,
                                     opacity=0.95,
                                 ).encode(
-                                    x="date:T",
+                                    x=alt.X("date:T", scale=x_scale_utc),
                                     y=alt.Y("price:Q", scale=price_scale),
                                     color=alt.Color(
                                         "type:N",
@@ -1740,3 +1873,5 @@ if page == "Sessions":
     sessions_page()
 elif page == "Provider":
     provider_page()
+
+_system_clock_widget()
