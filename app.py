@@ -125,8 +125,6 @@ def sessions_page():
         with right_col:
             with st.container(border=True):
                 st.markdown("##### 🕒 Session Clock")
-                if st.button("↻ Refresh", key="session_clock_refresh", type="secondary", use_container_width=True):
-                    st.rerun()
                 try:
                     clock_sessions = api_client.list_sessions(limit=200, offset=0)
                 except Exception:
@@ -136,10 +134,28 @@ def sessions_page():
                 if not clock_candidates:
                     st.info("No active/paused session.")
                 else:
-                    labels = [f"#{s['id']} {s['symbol']} ({s['status']})" for s in clock_candidates]
-                    selected_label = st.selectbox("Session", labels, key="session_clock_select")
-                    selected = clock_candidates[labels.index(selected_label)]
-                    sid = selected["id"]
+                    session_labels = {
+                        int(s["id"]): f"#{s['id']} {s['symbol']} ({s['status']})"
+                        for s in clock_candidates
+                    }
+                    selected_sid = st.selectbox(
+                        "Session",
+                        options=list(session_labels.keys()),
+                        format_func=lambda sid: session_labels.get(int(sid), f"#{sid}"),
+                        key="session_clock_select",
+                    )
+
+                    selected = next((s for s in clock_candidates if int(s.get("id", -1)) == int(selected_sid)), None)
+                    if st.button("↻ Refresh", key="session_clock_refresh", type="secondary", use_container_width=True):
+                        try:
+                            selected = api_client.get_session(int(selected_sid))
+                        except Exception:
+                            pass
+
+                    if not selected:
+                        selected = clock_candidates[0]
+
+                    sid = int(selected["id"])
                     status = selected.get("status", "PAUSED")
 
                     if status == "PAUSED" and f"paused_elapsed_{sid}" in st.session_state:
@@ -155,27 +171,24 @@ def sessions_page():
 
     with bias_tab:
         st.subheader("Bias Calculations")
-        list_cols = st.columns(3)
+        list_cols = st.columns(4)
         with list_cols[0]:
-            bc_limit = st.number_input("Limit", min_value=1, max_value=1000, value=100, step=10, key="bc_limit")
+            bc_session_id = st.number_input("Session ID", min_value=1, value=1, step=1, key="bc_session_id")
         with list_cols[1]:
-            bc_offset = st.number_input("Offset", min_value=0, value=0, step=10, key="bc_offset")
+            bc_limit = st.number_input("Limit", min_value=1, max_value=1000, value=100, step=10, key="bc_limit")
         with list_cols[2]:
+            bc_offset = st.number_input("Offset", min_value=0, value=0, step=10, key="bc_offset")
+        with list_cols[3]:
             st.write("")
-            if st.button("Get All", use_container_width=True, key="bc_get_all"):
+            if st.button("Get By Session", use_container_width=True, key="bc_get_all"):
                 try:
-                    sessions_for_bias = api_client.list_sessions(limit=500, offset=0)
-                    all_bias_calculations = []
-                    for session_row in sessions_for_bias:
-                        session_id = int(session_row["id"])
-                        session_bias = api_client.list_bias_calculations(
-                            session_id=session_id,
-                            limit=int(bc_limit),
-                            offset=int(bc_offset),
-                        )
-                        all_bias_calculations.extend(session_bias)
-                    st.session_state["bias_calculations_list"] = all_bias_calculations
-                    st.success(f"Loaded {len(all_bias_calculations)} bias calculation(s).")
+                    session_bias = api_client.list_bias_calculations(
+                        session_id=int(bc_session_id),
+                        limit=int(bc_limit),
+                        offset=int(bc_offset),
+                    )
+                    st.session_state["bias_calculations_list"] = session_bias
+                    st.success(f"Loaded {len(session_bias)} bias calculation(s) for session #{int(bc_session_id)}.")
                 except APIError as e:
                     st.error(f"Failed to list bias calculations: {e.detail}")
                 except Exception as e:
@@ -251,27 +264,26 @@ def sessions_page():
 
     with pullback_tab:
         st.subheader("Pullback Calculations")
-        list_cols = st.columns(3)
+        list_cols = st.columns(4)
         with list_cols[0]:
-            pc_limit = st.number_input("Limit", min_value=1, max_value=1000, value=100, step=10, key="pc_limit")
+            pc_session_id = st.number_input("Session ID", min_value=1, value=1, step=1, key="pc_session_id")
         with list_cols[1]:
-            pc_offset = st.number_input("Offset", min_value=0, value=0, step=10, key="pc_offset")
+            pc_limit = st.number_input("Limit", min_value=1, max_value=1000, value=100, step=10, key="pc_limit")
         with list_cols[2]:
+            pc_offset = st.number_input("Offset", min_value=0, value=0, step=10, key="pc_offset")
+        with list_cols[3]:
             st.write("")
-            if st.button("Get All", use_container_width=True, key="pc_get_all"):
+            if st.button("Get By Session", use_container_width=True, key="pc_get_all"):
                 try:
-                    sessions_for_pullbacks = api_client.list_sessions(limit=500, offset=0)
-                    all_pullbacks = []
-                    for session_row in sessions_for_pullbacks:
-                        session_id = int(session_row["id"])
-                        session_pullbacks = api_client.list_pullback_calculations(
-                            session_id=session_id,
-                            limit=int(pc_limit),
-                            offset=int(pc_offset),
-                        )
-                        all_pullbacks.extend(session_pullbacks)
-                    st.session_state["pullback_calculations_list"] = all_pullbacks
-                    st.success(f"Loaded {len(all_pullbacks)} pullback calculation(s).")
+                    session_pullbacks = api_client.list_pullback_calculations(
+                        session_id=int(pc_session_id),
+                        limit=int(pc_limit),
+                        offset=int(pc_offset),
+                    )
+                    st.session_state["pullback_calculations_list"] = session_pullbacks
+                    st.success(
+                        f"Loaded {len(session_pullbacks)} pullback calculation(s) for session #{int(pc_session_id)}."
+                    )
                 except APIError as e:
                     st.error(f"Failed to list pullback calculations: {e.detail}")
                 except Exception as e:
