@@ -7,7 +7,7 @@ TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h"]
 PROVIDERS = ["IBKR", "BYBIT"]
 ALERT_STATUSES = ["OPEN", "TP_HIT", "SL_HIT", "CANCELED"]
 ALERT_DIRECTIONS = ["LONG", "SHORT"]
-ALERT_TYPES = ["PREALERT", "TRIGGER_ALERT"]
+ALERT_TYPES = ["PREALERT", "TRIGGER_ALERT", "TREND_STRENGTH_ALERT"]
 STATUS_COLORS = {
     "ACTIVE": "🟢",
     "PAUSED": "🟡",
@@ -72,14 +72,8 @@ def _fmt_dt(val) -> str:
     if not val:
         return "—"
     try:
-        if isinstance(val, datetime):
-            dt = val
-        else:
-            dt = datetime.fromisoformat(str(val).replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        dt_utc = dt.astimezone(timezone.utc)
-        return dt_utc.strftime("%Y-%m-%d %H:%M:%S UTC")
+        # Keep backend timestamp representation unchanged in UI.
+        return str(val)
     except Exception:
         return str(val)
 
@@ -263,7 +257,7 @@ def sessions_page():
 
                 bias_columns = [
                     col
-                    for col in ["ma_bar_bias", "ma_persistent_bias", "structure_bias", "candidate_bias", "state_bias"]
+                    for col in ["ma_bar_bias", "ma_persistent_bias", "structure_bias", "strenght", "candidate_bias", "state_bias"]
                     if col in df.columns
                 ]
 
@@ -286,7 +280,7 @@ def sessions_page():
         if "bias_calculation_detail" in st.session_state:
             detail = st.session_state["bias_calculation_detail"]
             st.markdown("**Bias Calculation Detail**")
-            bias_cols = st.columns(4)
+            bias_cols = st.columns(5)
             with bias_cols[0]:
                 st.markdown(
                     f"**MA Bar Bias**<br>{_bias_colored_html(detail.get('ma_bar_bias', 'NEUTRAL'))}",
@@ -303,6 +297,11 @@ def sessions_page():
                     unsafe_allow_html=True,
                 )
             with bias_cols[3]:
+                st.markdown(
+                    f"**Strength**<br>{_bias_colored_html(detail.get('strenght', 'NEUTRAL'))}",
+                    unsafe_allow_html=True,
+                )
+            with bias_cols[4]:
                 st.markdown(
                     f"**Candidate Bias**<br>{_bias_colored_html(detail.get('candidate_bias', 'NEUTRAL'))}",
                     unsafe_allow_html=True,
@@ -445,7 +444,8 @@ def sessions_page():
                     for col in ["open", "high", "low", "close", "sma9", "sma20", "atr14"]:
                         if col in bars_df.columns:
                             bars_df[col] = pd.to_numeric(bars_df[col], errors="coerce")
-                    bars_df["date"] = pd.to_datetime(bars_df.get("date"), errors="coerce")
+                    # Backend timestamps are UTC; parse as UTC to keep chart times unchanged.
+                    bars_df["date"] = pd.to_datetime(bars_df.get("date"), errors="coerce", utc=True)
                     chart_df = bars_df.dropna(subset=["date", "open", "high", "low", "close"]).copy()
 
                     if not chart_df.empty:
@@ -454,11 +454,16 @@ def sessions_page():
                         last_close_display = (
                             f"{float(last_close):,.2f}" if pd.notna(last_close) else "—"
                         )
+                        last_bar_time_raw = None
+                        if isinstance(bars, list) and bars:
+                            last_raw = bars[-1]
+                            if isinstance(last_raw, dict):
+                                last_bar_time_raw = last_raw.get("date")
                         chart_header_cols = st.columns([1, 2])
                         with chart_header_cols[0]:
                             st.metric("Last Closed Price", last_close_display)
                         with chart_header_cols[1]:
-                            st.caption(f"Last bar time: {_fmt_dt(last_bar.get('date'))}")
+                            st.caption(f"Last bar time: {_fmt_dt(last_bar_time_raw)}")
 
                         chart_df["candle_low"] = chart_df[["open", "close"]].min(axis=1)
                         chart_df["candle_high"] = chart_df[["open", "close"]].max(axis=1)
@@ -626,12 +631,16 @@ def sessions_page():
                                 alerts_df["alert_time"] = pd.to_datetime(alerts_df["created_at"], errors="coerce")
                                 alerts_df = alerts_df.dropna(subset=["alert_time"])
                                 if not chart_df.empty and "date" in chart_df.columns:
-                                    alerts_df["alert_time"] = pd.to_datetime(
-                                        alerts_df["alert_time"], errors="coerce", utc=True
-                                    ).dt.tz_localize(None)
-                                    chart_times = pd.to_datetime(chart_df["date"], errors="coerce", utc=True).dt.tz_localize(
-                                        None
-                                    )
+                                    # Keep endpoint UTC values unchanged; localize naive datetimes to UTC.
+                                    if alerts_df["alert_time"].dt.tz is None:
+                                        alerts_df["alert_time"] = alerts_df["alert_time"].dt.tz_localize("UTC")
+                                    else:
+                                        alerts_df["alert_time"] = alerts_df["alert_time"].dt.tz_convert("UTC")
+                                    chart_times = pd.to_datetime(chart_df["date"], errors="coerce")
+                                    if chart_times.dt.tz is None:
+                                        chart_times = chart_times.dt.tz_localize("UTC")
+                                    else:
+                                        chart_times = chart_times.dt.tz_convert("UTC")
                                     min_chart_time = chart_times.min()
                                     max_chart_time = chart_times.max()
                                     alerts_df = alerts_df[
@@ -690,7 +699,7 @@ def sessions_page():
 
                 latest_bias = data.get("latest_bias_calculation")
                 if latest_bias:
-                    lb_cols = st.columns(4)
+                    lb_cols = st.columns(5)
                     with lb_cols[0]:
                         st.markdown(
                             f"**MA Bar Bias**<br>{_bias_colored_html(latest_bias.get('ma_bar_bias', 'NEUTRAL'))}",
@@ -707,6 +716,11 @@ def sessions_page():
                             unsafe_allow_html=True,
                         )
                     with lb_cols[3]:
+                        st.markdown(
+                            f"**Strength**<br>{_bias_colored_html(latest_bias.get('strenght', 'NEUTRAL'))}",
+                            unsafe_allow_html=True,
+                        )
+                    with lb_cols[4]:
                         st.metric("Bull / Bear Count", f"{latest_bias.get('bull_count', 0)} / {latest_bias.get('bear_count', 0)}")
 
                 # Pullback status panel.
@@ -957,9 +971,22 @@ def sessions_page():
     with sessions_tab:
         with st.container(border=True):
             st.markdown("**Session Metadata**")
-            if st.button("Get Metadata", use_container_width=True, key="session_get_metadata_btn"):
+            md_top_cols = st.columns([3, 2])
+            with md_top_cols[0]:
+                md_session_id = st.number_input(
+                    "Session ID (Metadata)",
+                    min_value=1,
+                    value=1,
+                    step=1,
+                    key="session_metadata_session_id",
+                )
+            with md_top_cols[1]:
+                st.write("")
+                get_metadata_clicked = st.button("Get Metadata", use_container_width=True, key="session_get_metadata_btn")
+
+            if get_metadata_clicked:
                 try:
-                    st.session_state["session_metadata"] = api_client.get_session_metadata()
+                    st.session_state["session_metadata"] = api_client.get_session_metadata(int(md_session_id))
                 except APIError as e:
                     st.error(f"Failed to get metadata: {e.detail}")
                 except Exception as e:
@@ -967,7 +994,7 @@ def sessions_page():
 
             if "session_metadata" in st.session_state:
                 metadata = st.session_state["session_metadata"]
-                md_cols = st.columns(5)
+                md_cols = st.columns(4)
                 with md_cols[0]:
                     st.metric("max_pullback_depth_atr", metadata.get("max_pullback_depth_atr", "—"))
                 with md_cols[1]:
@@ -976,8 +1003,14 @@ def sessions_page():
                     st.metric("min_pullback_depth_atr", metadata.get("min_pullback_depth_atr", "—"))
                 with md_cols[3]:
                     st.metric("sma20_touch_band_atr", metadata.get("sma20_touch_band_atr", "—"))
-                with md_cols[4]:
+
+                md_cols_2 = st.columns(3)
+                with md_cols_2[0]:
                     st.metric("strong_close_max_wick_ratio", metadata.get("strong_close_max_wick_ratio", "—"))
+                with md_cols_2[1]:
+                    st.metric("persistence_threshold", metadata.get("persistence_threshold", "—"))
+                with md_cols_2[2]:
+                    st.metric("strength_threshold", metadata.get("strength_threshold", "—"))
                 st.json(metadata)
 
         # ── Create session form ───────────────────────────────────────
