@@ -2,6 +2,7 @@ import streamlit as st
 import api_client
 from api_client import APIError
 from datetime import datetime, timezone
+import time
 
 TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h"]
 PROVIDERS = ["IBKR", "BYBIT"]
@@ -12,6 +13,14 @@ STATUS_COLORS = {
     "ACTIVE": "🟢",
     "PAUSED": "🟡",
     "COMPLETED": "🔴",
+}
+TIMEFRAME_REFRESH_SECONDS = {
+    "1m": 60,
+    "5m": 300,
+    "15m": 900,
+    "30m": 1800,
+    "1h": 3600,
+    "4h": 14400,
 }
 
 st.set_page_config(page_title="Tradingkk", page_icon="📈", layout="wide")
@@ -116,6 +125,10 @@ def _format_hms(total_seconds: int) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
+def _refresh_seconds_for_timeframe(timeframe: str | None) -> int:
+    return int(TIMEFRAME_REFRESH_SECONDS.get((timeframe or "").strip(), 60))
+
+
 @st.fragment(run_every="1s")
 def _system_clock_widget() -> None:
     now_utc = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
@@ -130,6 +143,55 @@ def _system_clock_widget() -> None:
         """,
         unsafe_allow_html=True,
     )
+
+
+@st.fragment(run_every="1s")
+def _visualize_auto_refresh_fragment() -> None:
+    if not st.session_state.get("viz_auto_refresh_enabled", False):
+        return
+
+    cfg = st.session_state.get("visualize_auto_refresh_cfg")
+    if not isinstance(cfg, dict):
+        st.caption("Auto-refresh is enabled. Run Visualize once to start polling.")
+        return
+
+    session_id = cfg.get("session_id")
+    num_bars = cfg.get("num_bars", 200)
+    timeframe = cfg.get("timeframe", "1m")
+    interval_seconds = int(cfg.get("interval_seconds", _refresh_seconds_for_timeframe(timeframe)))
+    last_fetch_ts = float(st.session_state.get("visualize_last_fetch_ts", 0.0))
+
+    elapsed = max(0.0, time.time() - last_fetch_ts)
+    remaining = max(0, int(interval_seconds - elapsed))
+    st.caption(
+        f"Auto-refresh ON | Session #{session_id} | TF: {timeframe} | "
+        f"Every {interval_seconds}s | Next in {remaining}s"
+    )
+
+    if elapsed < interval_seconds:
+        return
+
+    try:
+        viz_result = api_client.visualize_session(int(session_id), int(num_bars))
+        st.session_state["session_visualization_result"] = viz_result
+        tf = viz_result.get("session", {}).get("timeframe", timeframe)
+        st.session_state["visualize_auto_refresh_cfg"] = {
+            "session_id": int(session_id),
+            "num_bars": int(num_bars),
+            "timeframe": tf,
+            "interval_seconds": _refresh_seconds_for_timeframe(tf),
+        }
+        st.session_state["visualize_last_fetch_ts"] = time.time()
+        st.session_state.pop("visualize_auto_refresh_error", None)
+        # Fragment refresh alone does not redraw the outer visualize panel;
+        # rerun app so chart/bias/pullback sections render the new payload.
+        st.rerun()
+    except APIError as e:
+        st.session_state["visualize_auto_refresh_error"] = f"Auto-refresh failed: {e.detail}"
+        st.session_state["visualize_last_fetch_ts"] = time.time()
+    except Exception as e:
+        st.session_state["visualize_auto_refresh_error"] = f"Auto-refresh failed: {e}"
+        st.session_state["visualize_last_fetch_ts"] = time.time()
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────
@@ -396,6 +458,36 @@ def sessions_page():
 
     with visualize_tab:
         st.subheader("Visualize Session")
+        ctrl_cols = st.columns([1, 1, 3])
+        with ctrl_cols[0]:
+            st.toggle("Auto Refresh", key="viz_auto_refresh_enabled")
+        with ctrl_cols[1]:
+            if st.button("Refresh now", key="viz_refresh_now", use_container_width=True):
+                cfg = st.session_state.get("visualize_auto_refresh_cfg")
+                if isinstance(cfg, dict):
+                    try:
+                        viz_result = api_client.visualize_session(int(cfg.get("session_id")), int(cfg.get("num_bars", 200)))
+                        st.session_state["session_visualization_result"] = viz_result
+                        tf = viz_result.get("session", {}).get("timeframe", cfg.get("timeframe", "1m"))
+                        st.session_state["visualize_auto_refresh_cfg"] = {
+                            "session_id": int(cfg.get("session_id")),
+                            "num_bars": int(cfg.get("num_bars", 200)),
+                            "timeframe": tf,
+                            "interval_seconds": _refresh_seconds_for_timeframe(tf),
+                        }
+                        st.session_state["visualize_last_fetch_ts"] = time.time()
+                        st.session_state.pop("visualize_auto_refresh_error", None)
+                    except APIError as e:
+                        st.error(f"Refresh failed: {e.detail}")
+                    except Exception as e:
+                        st.error(f"Refresh failed: {e}")
+                else:
+                    st.info("Run Visualize first to initialize refresh config.")
+        with ctrl_cols[2]:
+            if st.session_state.get("visualize_auto_refresh_error"):
+                st.warning(st.session_state["visualize_auto_refresh_error"])
+
+        _visualize_auto_refresh_fragment()
 
         with st.container(border=True):
             with st.form("visualize_session_form"):
@@ -403,12 +495,21 @@ def sessions_page():
                 with viz_cols[0]:
                     viz_session_id = st.number_input("Session ID", min_value=1, value=1, step=1, key="viz_session_id")
                 with viz_cols[1]:
-                    viz_num_bars = st.number_input("Num Bars", min_value=20, max_value=1000, value=200, step=20, key="viz_num_bars")
+                    viz_num_bars = st.number_input("Num Bars", min_value=20, max_value=1000, value=70, step=20, key="viz_num_bars")
 
                 if st.form_submit_button("Run Visualize", use_container_width=True):
                     try:
                         viz_result = api_client.visualize_session(int(viz_session_id), int(viz_num_bars))
                         st.session_state["session_visualization_result"] = viz_result
+                        tf = viz_result.get("session", {}).get("timeframe", "1m")
+                        st.session_state["visualize_auto_refresh_cfg"] = {
+                            "session_id": int(viz_session_id),
+                            "num_bars": int(viz_num_bars),
+                            "timeframe": tf,
+                            "interval_seconds": _refresh_seconds_for_timeframe(tf),
+                        }
+                        st.session_state["visualize_last_fetch_ts"] = time.time()
+                        st.session_state.pop("visualize_auto_refresh_error", None)
                     except APIError as e:
                         st.error(f"Visualize failed: {e.detail}")
                     except Exception as e:
@@ -778,10 +879,11 @@ def sessions_page():
             st.markdown("**List Alerts**")
             list_cols = st.columns(6)
             with list_cols[0]:
-                al_session_id_filter = st.text_input(
-                    "Session ID (optional)",
-                    value="",
-                    placeholder="e.g. 12",
+                al_session_id_filter = st.number_input(
+                    "Session ID (0 = all)",
+                    min_value=0,
+                    value=0,
+                    step=1,
                     key="al_list_session_id",
                 )
             with list_cols[1]:
@@ -799,9 +901,7 @@ def sessions_page():
 
             if st.button("Get Alerts", use_container_width=True, key="al_get_list"):
                 try:
-                    session_id_filter = None
-                    if al_session_id_filter and al_session_id_filter.strip():
-                        session_id_filter = int(al_session_id_filter.strip())
+                    session_id_filter = int(al_session_id_filter) if int(al_session_id_filter) > 0 else None
                     alerts = api_client.list_alerts(
                         session_id=session_id_filter,
                         outcome_status=al_status_filter if al_status_filter != "All" else None,
@@ -1062,233 +1162,234 @@ def sessions_page():
                         except Exception as e:
                             st.error(f"Connection error: {e}")
 
-    st.divider()
+    with sessions_tab:
+        st.divider()
 
-    # ── Filters ───────────────────────────────────────────────────────
-    filter_col1, filter_col2, filter_col3 = st.columns(3)
-    with filter_col1:
-        status_filter = st.selectbox(
-            "Filter by status",
-            ["All", "ACTIVE", "PAUSED", "COMPLETED"],
-            index=0,
-        )
-    with filter_col2:
-        symbol_filter = st.text_input("Filter by symbol", placeholder="Leave blank for all")
-    with filter_col3:
-        provider_filter = st.selectbox("Filter by provider", ["All"] + PROVIDERS, index=0)
+        # ── Filters ───────────────────────────────────────────────────────
+        filter_col1, filter_col2, filter_col3 = st.columns(3)
+        with filter_col1:
+            status_filter = st.selectbox(
+                "Filter by status",
+                ["All", "ACTIVE", "PAUSED", "COMPLETED"],
+                index=0,
+            )
+        with filter_col2:
+            symbol_filter = st.text_input("Filter by symbol", placeholder="Leave blank for all")
+        with filter_col3:
+            provider_filter = st.selectbox("Filter by provider", ["All"] + PROVIDERS, index=0)
 
-    # ── Fetch sessions ────────────────────────────────────────────────
-    try:
-        sessions = api_client.list_sessions(
-            status=status_filter if status_filter != "All" else None,
-            symbol=symbol_filter.strip().upper() if symbol_filter.strip() else None,
-            provider=provider_filter if provider_filter != "All" else None,
-        )
-    except APIError as e:
-        st.error(f"Failed to load sessions: {e.detail}")
-        return
-    except Exception as e:
-        st.error(f"Cannot reach backend: {e}")
-        return
+        # ── Fetch sessions ────────────────────────────────────────────────
+        try:
+            sessions = api_client.list_sessions(
+                status=status_filter if status_filter != "All" else None,
+                symbol=symbol_filter.strip().upper() if symbol_filter.strip() else None,
+                provider=provider_filter if provider_filter != "All" else None,
+            )
+        except APIError as e:
+            st.error(f"Failed to load sessions: {e.detail}")
+            return
+        except Exception as e:
+            st.error(f"Cannot reach backend: {e}")
+            return
 
-    if not sessions:
-        st.info("No sessions found. Create one above to get started.")
-        return
+        if not sessions:
+            st.info("No sessions found. Create one above to get started.")
+            return
 
-    st.subheader(f"{len(sessions)} session(s)")
+        st.subheader(f"{len(sessions)} session(s)")
 
-    for sess in sessions:
-        sid = sess["id"]
-        status = sess["status"]
-        icon = STATUS_COLORS.get(status, "⚪")
-        card_class = "session-card"
-        if status == "PAUSED":
-            card_class += " session-card-paused"
-        elif status == "COMPLETED":
-            card_class += " session-card-completed"
+        for sess in sessions:
+            sid = sess["id"]
+            status = sess["status"]
+            icon = STATUS_COLORS.get(status, "⚪")
+            card_class = "session-card"
+            if status == "PAUSED":
+                card_class += " session-card-paused"
+            elif status == "COMPLETED":
+                card_class += " session-card-completed"
 
-        with st.container(border=True):
-            top_left, top_right = st.columns([3, 1])
-            with top_left:
-                st.markdown(f"### {icon} {sess['symbol']}  `#{sid}`")
-            with top_right:
-                st.markdown(f"**Status:** {status}")
+            with st.container(border=True):
+                top_left, top_right = st.columns([3, 1])
+                with top_left:
+                    st.markdown(f"### {icon} {sess['symbol']}  `#{sid}`")
+                with top_right:
+                    st.markdown(f"**Status:** {status}")
 
-            detail_cols = st.columns(5)
-            with detail_cols[0]:
-                st.metric("Provider / TF", f"{sess.get('provider', 'IBKR')} / {sess['timeframe']}")
-            with detail_cols[1]:
-                state_bias = sess.get("state_bias", sess.get("current_bias", "NEUTRAL"))
-                st.markdown(f"**State Bias**<br>{_bias_colored_html(state_bias)}", unsafe_allow_html=True)
-            with detail_cols[2]:
-                st.markdown(
-                    f"**Candidate Bias**<br>{_bias_colored_html(sess.get('candidate_bias', 'NEUTRAL'))}",
-                    unsafe_allow_html=True,
-                )
-            with detail_cols[3]:
-                st.metric("Sec Type", sess.get("sec_type", "STK"))
-            with detail_cols[4]:
-                st.metric("Consec. Count", sess["consecutive_count"])
+                detail_cols = st.columns(5)
+                with detail_cols[0]:
+                    st.metric("Provider / TF", f"{sess.get('provider', 'IBKR')} / {sess['timeframe']}")
+                with detail_cols[1]:
+                    state_bias = sess.get("state_bias", sess.get("current_bias", "NEUTRAL"))
+                    st.markdown(f"**State Bias**<br>{_bias_colored_html(state_bias)}", unsafe_allow_html=True)
+                with detail_cols[2]:
+                    st.markdown(
+                        f"**Candidate Bias**<br>{_bias_colored_html(sess.get('candidate_bias', 'NEUTRAL'))}",
+                        unsafe_allow_html=True,
+                    )
+                with detail_cols[3]:
+                    st.metric("Sec Type", sess.get("sec_type", "STK"))
+                with detail_cols[4]:
+                    st.metric("Consec. Count", sess["consecutive_count"])
 
-            param_cols = st.columns(4)
-            with param_cols[0]:
-                st.caption(f"Persist. Window: **{sess['persistence_window']}**")
-            with param_cols[1]:
-                st.caption(f"Persist. Threshold: **{sess['persistence_threshold']}**")
-            with param_cols[2]:
-                st.caption(f"Started: **{_fmt_dt(sess.get('started_at'))}**")
-            with param_cols[3]:
-                st.caption(f"Ended: **{_fmt_dt(sess.get('ended_at'))}**")
+                param_cols = st.columns(4)
+                with param_cols[0]:
+                    st.caption(f"Persist. Window: **{sess['persistence_window']}**")
+                with param_cols[1]:
+                    st.caption(f"Persist. Threshold: **{sess['persistence_threshold']}**")
+                with param_cols[2]:
+                    st.caption(f"Started: **{_fmt_dt(sess.get('started_at'))}**")
+                with param_cols[3]:
+                    st.caption(f"Ended: **{_fmt_dt(sess.get('ended_at'))}**")
 
-            pullback_cols = st.columns(4)
-            with pullback_cols[0]:
-                st.caption(f"Swing Lookback: **{sess.get('swing_lookback', '—')}**")
-            with pullback_cols[1]:
-                st.caption(f"Pullback State: **{sess.get('pullback_state', 'NONE')}**")
-            with pullback_cols[2]:
-                st.caption(f"Pullback Direction: **{sess.get('pullback_direction', 'NONE')}**")
-            with pullback_cols[3]:
-                touched = "Yes" if sess.get("touched_sma20") else "No"
-                st.caption(f"Touched SMA20: **{touched}**")
+                pullback_cols = st.columns(4)
+                with pullback_cols[0]:
+                    st.caption(f"Swing Lookback: **{sess.get('swing_lookback', '—')}**")
+                with pullback_cols[1]:
+                    st.caption(f"Pullback State: **{sess.get('pullback_state', 'NONE')}**")
+                with pullback_cols[2]:
+                    st.caption(f"Pullback Direction: **{sess.get('pullback_direction', 'NONE')}**")
+                with pullback_cols[3]:
+                    touched = "Yes" if sess.get("touched_sma20") else "No"
+                    st.caption(f"Touched SMA20: **{touched}**")
 
-            level_cols = st.columns(5)
-            with level_cols[0]:
-                st.caption(f"PB Anchor High: **{sess.get('pb_anchor_high', '—')}**")
-            with level_cols[1]:
-                st.caption(f"PB Low: **{sess.get('pb_low', '—')}**")
-            with level_cols[2]:
-                st.caption(f"PB Anchor Low: **{sess.get('pb_anchor_low', '—')}**")
-            with level_cols[3]:
-                st.caption(f"PB High: **{sess.get('pb_high', '—')}**")
-            with level_cols[4]:
-                st.caption(f"PB Start At: **{_fmt_dt(sess.get('pb_start_at'))}**")
+                level_cols = st.columns(5)
+                with level_cols[0]:
+                    st.caption(f"PB Anchor High: **{sess.get('pb_anchor_high', '—')}**")
+                with level_cols[1]:
+                    st.caption(f"PB Low: **{sess.get('pb_low', '—')}**")
+                with level_cols[2]:
+                    st.caption(f"PB Anchor Low: **{sess.get('pb_anchor_low', '—')}**")
+                with level_cols[3]:
+                    st.caption(f"PB High: **{sess.get('pb_high', '—')}**")
+                with level_cols[4]:
+                    st.caption(f"PB Start At: **{_fmt_dt(sess.get('pb_start_at'))}**")
 
-            st.caption(f"Last Alert At: **{_fmt_dt(sess.get('last_alert_at'))}**")
+                st.caption(f"Last Alert At: **{_fmt_dt(sess.get('last_alert_at'))}**")
 
-            # ── Action buttons ────────────────────────────────────────
-            btn_cols = st.columns(5)
+                # ── Action buttons ────────────────────────────────────────
+                btn_cols = st.columns(5)
 
-            with btn_cols[0]:
-                if status != "ACTIVE":
-                    if st.button("▶ Start", key=f"start_{sid}", use_container_width=True):
-                        try:
-                            api_client.start_session(sid, sec_type=sess.get("sec_type"))
-                            st.session_state.pop(f"paused_elapsed_{sid}", None)
-                            st.rerun()
-                        except APIError as e:
-                            st.error(e.detail)
-
-            with btn_cols[1]:
-                if status == "ACTIVE":
-                    if st.button("⏸ Pause", key=f"pause_{sid}", use_container_width=True):
-                        try:
-                            paused_session = api_client.pause_session(sid)
-                            elapsed = _elapsed_seconds_from_started(paused_session.get("started_at", sess.get("started_at")))
-                            if elapsed is not None:
-                                st.session_state[f"paused_elapsed_{sid}"] = elapsed
-                            st.rerun()
-                        except APIError as e:
-                            st.error(e.detail)
-
-            with btn_cols[2]:
-                if status in ("ACTIVE", "PAUSED"):
-                    if st.button("⏹ End", key=f"end_{sid}", use_container_width=True):
-                        try:
-                            api_client.end_session(sid)
-                            st.session_state.pop(f"paused_elapsed_{sid}", None)
-                            st.rerun()
-                        except APIError as e:
-                            st.error(e.detail)
-
-            with btn_cols[3]:
-                if status != "ACTIVE":
-                    if st.button("✏️ Edit", key=f"edit_{sid}", use_container_width=True):
-                        st.session_state[f"editing_{sid}"] = True
-
-            with btn_cols[4]:
-                if st.button("🗑 Delete", key=f"del_{sid}", use_container_width=True, type="primary"):
-                    st.session_state[f"confirm_del_{sid}"] = True
-
-            # ── Delete confirmation ───────────────────────────────────
-            if st.session_state.get(f"confirm_del_{sid}"):
-                st.warning(f"Are you sure you want to delete session **#{sid}**?")
-                confirm_cols = st.columns(2)
-                with confirm_cols[0]:
-                    if st.button("Yes, delete", key=f"yes_del_{sid}", type="primary", use_container_width=True):
-                        try:
-                            api_client.delete_session(sid)
-                            st.session_state.pop(f"confirm_del_{sid}", None)
-                            st.rerun()
-                        except APIError as e:
-                            st.error(e.detail)
-                with confirm_cols[1]:
-                    if st.button("Cancel", key=f"no_del_{sid}", use_container_width=True):
-                        st.session_state.pop(f"confirm_del_{sid}", None)
-                        st.rerun()
-
-            # ── Edit form ─────────────────────────────────────────────
-            if st.session_state.get(f"editing_{sid}"):
-                with st.form(f"edit_form_{sid}"):
-                    st.subheader(f"Edit Session #{sid}")
-                    ec1, ec2 = st.columns(2)
-                    with ec1:
-                        new_provider = st.selectbox(
-                            "Provider",
-                            PROVIDERS,
-                            index=PROVIDERS.index(sess.get("provider", "IBKR"))
-                            if sess.get("provider", "IBKR") in PROVIDERS
-                            else 0,
-                            key=f"provider_{sid}",
-                        )
-                        new_sec_type = st.selectbox(
-                            "Sec Type",
-                            SEC_TYPES,
-                            index=SEC_TYPES.index(sess.get("sec_type", "STK"))
-                            if sess.get("sec_type", "STK") in SEC_TYPES
-                            else 0,
-                            key=f"sec_type_{sid}",
-                        )
-                        new_tf = st.selectbox(
-                            "Timeframe",
-                            TIMEFRAMES,
-                            index=TIMEFRAMES.index(sess["timeframe"]),
-                            key=f"tf_{sid}",
-                        )
-                        new_hk = st.number_input(
-                            "Hysteresis K", min_value=1, value=sess["hysteresis_k"], key=f"hk_{sid}"
-                        )
-                        new_sl = st.number_input(
-                            "Swing Lookback", min_value=1, value=sess.get("swing_lookback", 2), key=f"sl_{sid}"
-                        )
-                    with ec2:
-                        new_pw = st.number_input(
-                            "Persistence Window", min_value=5, value=sess["persistence_window"], key=f"pw_{sid}"
-                        )
-                        new_pt = st.number_input(
-                            "Persistence Threshold", min_value=1, value=sess["persistence_threshold"], key=f"pt_{sid}"
-                        )
-                    save_cols = st.columns(2)
-                    with save_cols[0]:
-                        if st.form_submit_button("Save", use_container_width=True):
+                with btn_cols[0]:
+                    if status != "ACTIVE":
+                        if st.button("▶ Start", key=f"start_{sid}", use_container_width=True):
                             try:
-                                api_client.update_session(
-                                    sid,
-                                    provider=new_provider,
-                                    sec_type=new_sec_type,
-                                    timeframe=new_tf,
-                                    hysteresis_k=int(new_hk),
-                                    persistence_window=int(new_pw),
-                                    persistence_threshold=int(new_pt),
-                                    swing_lookback=int(new_sl),
-                                )
-                                st.session_state.pop(f"editing_{sid}", None)
+                                api_client.start_session(sid, sec_type=sess.get("sec_type"))
+                                st.session_state.pop(f"paused_elapsed_{sid}", None)
                                 st.rerun()
                             except APIError as e:
                                 st.error(e.detail)
-                    with save_cols[1]:
-                        if st.form_submit_button("Cancel", use_container_width=True):
-                            st.session_state.pop(f"editing_{sid}", None)
+
+                with btn_cols[1]:
+                    if status == "ACTIVE":
+                        if st.button("⏸ Pause", key=f"pause_{sid}", use_container_width=True):
+                            try:
+                                paused_session = api_client.pause_session(sid)
+                                elapsed = _elapsed_seconds_from_started(paused_session.get("started_at", sess.get("started_at")))
+                                if elapsed is not None:
+                                    st.session_state[f"paused_elapsed_{sid}"] = elapsed
+                                st.rerun()
+                            except APIError as e:
+                                st.error(e.detail)
+
+                with btn_cols[2]:
+                    if status in ("ACTIVE", "PAUSED"):
+                        if st.button("⏹ End", key=f"end_{sid}", use_container_width=True):
+                            try:
+                                api_client.end_session(sid)
+                                st.session_state.pop(f"paused_elapsed_{sid}", None)
+                                st.rerun()
+                            except APIError as e:
+                                st.error(e.detail)
+
+                with btn_cols[3]:
+                    if status != "ACTIVE":
+                        if st.button("✏️ Edit", key=f"edit_{sid}", use_container_width=True):
+                            st.session_state[f"editing_{sid}"] = True
+
+                with btn_cols[4]:
+                    if st.button("🗑 Delete", key=f"del_{sid}", use_container_width=True, type="primary"):
+                        st.session_state[f"confirm_del_{sid}"] = True
+
+                # ── Delete confirmation ───────────────────────────────────
+                if st.session_state.get(f"confirm_del_{sid}"):
+                    st.warning(f"Are you sure you want to delete session **#{sid}**?")
+                    confirm_cols = st.columns(2)
+                    with confirm_cols[0]:
+                        if st.button("Yes, delete", key=f"yes_del_{sid}", type="primary", use_container_width=True):
+                            try:
+                                api_client.delete_session(sid)
+                                st.session_state.pop(f"confirm_del_{sid}", None)
+                                st.rerun()
+                            except APIError as e:
+                                st.error(e.detail)
+                    with confirm_cols[1]:
+                        if st.button("Cancel", key=f"no_del_{sid}", use_container_width=True):
+                            st.session_state.pop(f"confirm_del_{sid}", None)
                             st.rerun()
+
+                # ── Edit form ─────────────────────────────────────────────
+                if st.session_state.get(f"editing_{sid}"):
+                    with st.form(f"edit_form_{sid}"):
+                        st.subheader(f"Edit Session #{sid}")
+                        ec1, ec2 = st.columns(2)
+                        with ec1:
+                            new_provider = st.selectbox(
+                                "Provider",
+                                PROVIDERS,
+                                index=PROVIDERS.index(sess.get("provider", "IBKR"))
+                                if sess.get("provider", "IBKR") in PROVIDERS
+                                else 0,
+                                key=f"provider_{sid}",
+                            )
+                            new_sec_type = st.selectbox(
+                                "Sec Type",
+                                SEC_TYPES,
+                                index=SEC_TYPES.index(sess.get("sec_type", "STK"))
+                                if sess.get("sec_type", "STK") in SEC_TYPES
+                                else 0,
+                                key=f"sec_type_{sid}",
+                            )
+                            new_tf = st.selectbox(
+                                "Timeframe",
+                                TIMEFRAMES,
+                                index=TIMEFRAMES.index(sess["timeframe"]),
+                                key=f"tf_{sid}",
+                            )
+                            new_hk = st.number_input(
+                                "Hysteresis K", min_value=1, value=sess["hysteresis_k"], key=f"hk_{sid}"
+                            )
+                            new_sl = st.number_input(
+                                "Swing Lookback", min_value=1, value=sess.get("swing_lookback", 2), key=f"sl_{sid}"
+                            )
+                        with ec2:
+                            new_pw = st.number_input(
+                                "Persistence Window", min_value=5, value=sess["persistence_window"], key=f"pw_{sid}"
+                            )
+                            new_pt = st.number_input(
+                                "Persistence Threshold", min_value=1, value=sess["persistence_threshold"], key=f"pt_{sid}"
+                            )
+                        save_cols = st.columns(2)
+                        with save_cols[0]:
+                            if st.form_submit_button("Save", use_container_width=True):
+                                try:
+                                    api_client.update_session(
+                                        sid,
+                                        provider=new_provider,
+                                        sec_type=new_sec_type,
+                                        timeframe=new_tf,
+                                        hysteresis_k=int(new_hk),
+                                        persistence_window=int(new_pw),
+                                        persistence_threshold=int(new_pt),
+                                        swing_lookback=int(new_sl),
+                                    )
+                                    st.session_state.pop(f"editing_{sid}", None)
+                                    st.rerun()
+                                except APIError as e:
+                                    st.error(e.detail)
+                        with save_cols[1]:
+                            if st.form_submit_button("Cancel", use_container_width=True):
+                                st.session_state.pop(f"editing_{sid}", None)
+                                st.rerun()
 
 
 # ── Provider page ─────────────────────────────────────────────────────
