@@ -71,6 +71,16 @@ st.markdown(
         color: #e8eaed;
         font-variant-numeric: tabular-nums;
     }
+    .info-rich-text {
+        font-size: 1.03rem;
+        line-height: 1.65;
+        color: #8bdc65;
+        background: #131722;
+        border: 1px solid rgba(151, 166, 195, 0.35);
+        border-radius: 10px;
+        padding: 0.9rem 1rem;
+        white-space: pre-wrap;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -2014,6 +2024,7 @@ def provider_page():
 
 
 def information_page():
+    import html
     import json
 
     st.header("Information")
@@ -2052,6 +2063,14 @@ def information_page():
         if has_strategy_text_payload:
             st.subheader("Trading Strategy Information")
             st.caption("Structured strategy notes returned by `/tradinginfo`.")
+            panel_height = st.slider(
+                "Text panel height",
+                min_value=140,
+                max_value=560,
+                value=240,
+                step=20,
+                key="trading_info_panel_height",
+            )
 
             section_titles = {
                 "session": "Session",
@@ -2066,13 +2085,13 @@ def information_page():
                 section_text = info.get(section_key, "")
                 with st.container(border=True):
                     st.markdown(f"**{section_titles.get(section_key, section_key.title())}**")
-                    st.text_area(
-                        "Description",
-                        value=section_text,
-                        disabled=True,
-                        height=220,
-                        label_visibility="collapsed",
-                        key=f"trading_info_text_{section_key}",
+                    st.markdown(
+                        (
+                            f"<div class='info-rich-text' "
+                            f"style='max-height:{panel_height}px; overflow-y:auto;'>"
+                            f"{html.escape(section_text)}</div>"
+                        ),
+                        unsafe_allow_html=True,
                     )
 
             with st.expander("View raw JSON"):
