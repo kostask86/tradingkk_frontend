@@ -35,6 +35,7 @@ def create_session(
     persistence_window: int = 20,
     persistence_threshold: int = 15,
     swing_lookback: int = 2,
+    cooldown_until: int = 5,
 ) -> dict:
     payload = {
         "symbol": symbol.upper().strip(),
@@ -45,6 +46,7 @@ def create_session(
         "persistence_window": persistence_window,
         "persistence_threshold": persistence_threshold,
         "swing_lookback": swing_lookback,
+        "cooldown_until": cooldown_until,
     }
     resp = requests.post(f"{BASE_URL}/api/sessions/", json=payload)
     return _handle_response(resp, 201)
@@ -314,4 +316,9 @@ def calculate_candidate_bias(
 
 def health_check() -> dict:
     resp = requests.get(f"{BASE_URL}/health")
+    return _handle_response(resp)
+
+
+def get_trading_info() -> dict:
+    resp = requests.get(f"{BASE_URL}/tradinginfo")
     return _handle_response(resp)

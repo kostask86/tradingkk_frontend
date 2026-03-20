@@ -210,7 +210,7 @@ with st.sidebar:
         st.error("Backend unreachable (localhost:8000)")
 
     st.divider()
-    page = st.radio("Navigation", ["Sessions", "Provider"], index=0, label_visibility="collapsed")
+    page = st.radio("Navigation", ["Sessions", "Provider", "Information"], index=0, label_visibility="collapsed")
 
 
 # ── Sessions page ─────────────────────────────────────────────────────
@@ -1104,13 +1104,15 @@ def sessions_page():
                 with md_cols[3]:
                     st.metric("sma20_touch_band_atr", metadata.get("sma20_touch_band_atr", "—"))
 
-                md_cols_2 = st.columns(3)
+                md_cols_2 = st.columns(4)
                 with md_cols_2[0]:
                     st.metric("strong_close_max_wick_ratio", metadata.get("strong_close_max_wick_ratio", "—"))
                 with md_cols_2[1]:
                     st.metric("persistence_threshold", metadata.get("persistence_threshold", "—"))
                 with md_cols_2[2]:
                     st.metric("strength_threshold", metadata.get("strength_threshold", "—"))
+                with md_cols_2[3]:
+                    st.metric("cooldown_until", metadata.get("cooldown_until", "—"))
                 st.json(metadata)
 
         # ── Create session form ───────────────────────────────────────
@@ -1135,9 +1137,10 @@ def sessions_page():
                     persistence_window = st.number_input("Persistence Window", min_value=5, value=20, step=1)
                 bottom_col1, bottom_col2 = st.columns(2)
                 with bottom_col1:
-                    persistence_threshold = st.number_input("Persistence Threshold", min_value=1, value=15, step=1)
+                    persistence_threshold = st.number_input("Persistence Threshold", min_value=1, value=10, step=1)
                 with bottom_col2:
                     swing_lookback = st.number_input("Swing Lookback", min_value=1, value=2, step=1)
+                cooldown_until = st.number_input("Cooldown Until", min_value=0, value=5, step=1)
 
                 submitted = st.form_submit_button("Create Session", use_container_width=True)
                 if submitted:
@@ -1154,6 +1157,7 @@ def sessions_page():
                                 persistence_window=int(persistence_window),
                                 persistence_threshold=int(persistence_threshold),
                                 swing_lookback=int(swing_lookback),
+                                cooldown_until=int(cooldown_until),
                             )
                             st.success(f"Session **#{new_session['id']}** created for **{new_session['symbol']}**")
                             st.rerun()
@@ -1231,17 +1235,19 @@ def sessions_page():
                 with detail_cols[4]:
                     st.metric("Consec. Count", sess["consecutive_count"])
 
-                param_cols = st.columns(4)
+                param_cols = st.columns(5)
                 with param_cols[0]:
                     st.caption(f"Persist. Window: **{sess['persistence_window']}**")
                 with param_cols[1]:
                     st.caption(f"Persist. Threshold: **{sess['persistence_threshold']}**")
                 with param_cols[2]:
-                    st.caption(f"Started: **{_fmt_dt(sess.get('started_at'))}**")
+                    st.caption(f"Cooldown Until: **{sess.get('cooldown_until', '—')}**")
                 with param_cols[3]:
+                    st.caption(f"Started: **{_fmt_dt(sess.get('started_at'))}**")
+                with param_cols[4]:
                     st.caption(f"Ended: **{_fmt_dt(sess.get('ended_at'))}**")
 
-                pullback_cols = st.columns(4)
+                pullback_cols = st.columns(5)
                 with pullback_cols[0]:
                     st.caption(f"Swing Lookback: **{sess.get('swing_lookback', '—')}**")
                 with pullback_cols[1]:
@@ -1251,6 +1257,8 @@ def sessions_page():
                 with pullback_cols[3]:
                     touched = "Yes" if sess.get("touched_sma20") else "No"
                     st.caption(f"Touched SMA20: **{touched}**")
+                with pullback_cols[4]:
+                    st.caption(f"Alert Freeze: **{'Yes' if sess.get('alert_freeze') else 'No'}**")
 
                 level_cols = st.columns(5)
                 with level_cols[0]:
@@ -1368,6 +1376,9 @@ def sessions_page():
                             new_pt = st.number_input(
                                 "Persistence Threshold", min_value=1, value=sess["persistence_threshold"], key=f"pt_{sid}"
                             )
+                            new_cooldown = st.number_input(
+                                "Cooldown Until", min_value=0, value=sess.get("cooldown_until", 5), key=f"cooldown_{sid}"
+                            )
                         save_cols = st.columns(2)
                         with save_cols[0]:
                             if st.form_submit_button("Save", use_container_width=True):
@@ -1381,6 +1392,7 @@ def sessions_page():
                                         persistence_window=int(new_pw),
                                         persistence_threshold=int(new_pt),
                                         swing_lookback=int(new_sl),
+                                        cooldown_until=int(new_cooldown),
                                     )
                                     st.session_state.pop(f"editing_{sid}", None)
                                     st.rerun()
@@ -2001,11 +2013,231 @@ def provider_page():
                 st.json(cb_data)
 
 
+def information_page():
+    import json
+
+    st.header("Information")
+    (info_tab,) = st.tabs(["Trading Info"])
+
+    with info_tab:
+        top_cols = st.columns([2, 1])
+        with top_cols[0]:
+            st.caption("Strategy information returned by backend `/tradinginfo`.")
+        with top_cols[1]:
+            refresh_clicked = st.button("↻ Refresh Info", use_container_width=True, key="trading_info_refresh")
+
+        if refresh_clicked or "trading_info_result" not in st.session_state:
+            try:
+                st.session_state["trading_info_result"] = api_client.get_trading_info()
+                st.session_state.pop("trading_info_error", None)
+            except APIError as e:
+                st.session_state["trading_info_error"] = f"Failed to load trading info: {e.detail}"
+            except Exception as e:
+                st.session_state["trading_info_error"] = f"Connection error: {e}"
+
+        if st.session_state.get("trading_info_error"):
+            st.error(st.session_state["trading_info_error"])
+            return
+
+        info = st.session_state.get("trading_info_result")
+        if not isinstance(info, dict):
+            st.info("No information returned yet.")
+            return
+
+        strategy_sections = ["session", "bias_calculation", "pullback_calculation", "alert"]
+        has_strategy_text_payload = all(
+            isinstance(info.get(section), str) for section in strategy_sections if section in info
+        ) and any(section in info for section in strategy_sections)
+
+        if has_strategy_text_payload:
+            st.subheader("Trading Strategy Information")
+            st.caption("Structured strategy notes returned by `/tradinginfo`.")
+
+            section_titles = {
+                "session": "Session",
+                "bias_calculation": "Bias Calculation",
+                "pullback_calculation": "Pullback Calculation",
+                "alert": "Alert",
+            }
+
+            for section_key in strategy_sections:
+                if section_key not in info:
+                    continue
+                section_text = info.get(section_key, "")
+                with st.container(border=True):
+                    st.markdown(f"**{section_titles.get(section_key, section_key.title())}**")
+                    st.text_area(
+                        "Description",
+                        value=section_text,
+                        disabled=True,
+                        height=220,
+                        label_visibility="collapsed",
+                        key=f"trading_info_text_{section_key}",
+                    )
+
+            with st.expander("View raw JSON"):
+                st.json(info)
+            return
+
+        def _show_textbox_grid(data: dict, key_prefix: str):
+            if not data:
+                st.caption("No fields available.")
+                return
+            items = list(data.items())
+            cols = st.columns(2)
+            for idx, (k, v) in enumerate(items):
+                with cols[idx % 2]:
+                    if isinstance(v, (dict, list)):
+                        st.text_area(
+                            k.replace("_", " ").title(),
+                            value=json.dumps(v, indent=2),
+                            disabled=True,
+                            height=120,
+                            key=f"{key_prefix}_{idx}",
+                        )
+                    else:
+                        st.text_input(
+                            k.replace("_", " ").title(),
+                            value="" if v is None else str(v),
+                            disabled=True,
+                            key=f"{key_prefix}_{idx}",
+                        )
+
+        st.subheader("Trading Info Overview")
+        overview = {
+            "openapi": info.get("openapi"),
+            "title": (info.get("info") or {}).get("title"),
+            "version": (info.get("info") or {}).get("version"),
+        }
+        with st.container(border=True):
+            _show_textbox_grid(overview, "ti_overview")
+
+        paths = info.get("paths", {}) if isinstance(info.get("paths"), dict) else {}
+        session_paths = {k: v for k, v in paths.items() if k.startswith("/api/sessions")}
+
+        st.subheader("Sessions Endpoints")
+        if not session_paths:
+            st.info("No session endpoints found in trading info.")
+        else:
+            for p_idx, (path_name, path_data) in enumerate(session_paths.items()):
+                if not isinstance(path_data, dict):
+                    continue
+                with st.container(border=True):
+                    st.markdown(f"**{path_name}**")
+                    for m_idx, method in enumerate(["get", "post", "patch", "delete", "put"]):
+                        method_obj = path_data.get(method)
+                        if not isinstance(method_obj, dict):
+                            continue
+
+                        st.markdown(f"`{method.upper()}`")
+                        params = method_obj.get("parameters", [])
+                        param_names = []
+                        if isinstance(params, list):
+                            for p in params:
+                                if isinstance(p, dict) and p.get("name"):
+                                    param_names.append(str(p.get("name")))
+
+                        req_schema = ""
+                        req_body = method_obj.get("requestBody", {})
+                        if isinstance(req_body, dict):
+                            req_schema = (
+                                req_body.get("content", {})
+                                .get("application/json", {})
+                                .get("schema", {})
+                                .get("$ref", "")
+                            )
+
+                        ok_schema = ""
+                        responses = method_obj.get("responses", {})
+                        if isinstance(responses, dict):
+                            ok_schema = (
+                                responses.get("200", {})
+                                .get("content", {})
+                                .get("application/json", {})
+                                .get("schema", {})
+                                .get("$ref", "")
+                            )
+
+                        endpoint_box = {
+                            "summary": method_obj.get("summary", ""),
+                            "operation_id": method_obj.get("operationId", ""),
+                            "query_parameters": ", ".join(param_names),
+                            "request_schema": req_schema,
+                            "response_200_schema": ok_schema,
+                        }
+                        _show_textbox_grid(endpoint_box, f"ti_ep_{p_idx}_{m_idx}")
+                        st.divider()
+
+        schemas = (
+            info.get("components", {}).get("schemas", {})
+            if isinstance(info.get("components"), dict)
+            else {}
+        )
+        if not isinstance(schemas, dict):
+            schemas = {}
+
+        st.subheader("Session Schemas")
+        relevant_schema_names = [
+            "SessionCreate",
+            "SessionRead",
+            "SessionUpdate",
+            "SessionMetadataResponse",
+            "SessionVisualizationResponse",
+        ]
+        found_any_schema = False
+        for s_idx, schema_name in enumerate(relevant_schema_names):
+            schema_obj = schemas.get(schema_name)
+            if not isinstance(schema_obj, dict):
+                continue
+            found_any_schema = True
+            with st.container(border=True):
+                st.markdown(f"**{schema_name}**")
+                properties = schema_obj.get("properties", {})
+                required = schema_obj.get("required", [])
+                required_set = set(required) if isinstance(required, list) else set()
+
+                if not isinstance(properties, dict) or not properties:
+                    st.caption("No properties.")
+                    continue
+
+                for f_idx, (field_name, field_schema) in enumerate(properties.items()):
+                    if not isinstance(field_schema, dict):
+                        field_schema = {}
+                    field_type = field_schema.get("type")
+                    if not field_type and "$ref" in field_schema:
+                        field_type = str(field_schema.get("$ref"))
+                    if not field_type and "anyOf" in field_schema:
+                        field_type = " | ".join(
+                            [
+                                str(x.get("type") or x.get("$ref"))
+                                for x in field_schema.get("anyOf", [])
+                                if isinstance(x, dict)
+                            ]
+                        )
+
+                    field_box = {
+                        "field": field_name,
+                        "type": field_type or "-",
+                        "required": "yes" if field_name in required_set else "no",
+                        "default": field_schema.get("default", "-"),
+                    }
+                    _show_textbox_grid(field_box, f"ti_schema_{s_idx}_{f_idx}")
+                    st.divider()
+
+        if not found_any_schema:
+            st.info("No relevant session schemas found in trading info.")
+
+        with st.expander("View raw JSON"):
+            st.json(info)
+
+
 # ── Router ────────────────────────────────────────────────────────────
 
 if page == "Sessions":
     sessions_page()
 elif page == "Provider":
     provider_page()
+elif page == "Information":
+    information_page()
 
 _system_clock_widget()
