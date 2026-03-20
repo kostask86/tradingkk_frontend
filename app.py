@@ -227,8 +227,8 @@ with st.sidebar:
 
 def sessions_page():
     st.header("Sessions")
-    sessions_tab, bias_tab, pullback_tab, visualize_tab, alerts_tab = st.tabs(
-        ["Sessions", "Bias Calculations", "Pullback Calculations", "Visualize", "Alerts"]
+    sessions_tab, bias_tab, pullback_tab, volatility_tab, visualize_tab, alerts_tab = st.tabs(
+        ["Sessions", "Bias Calculations", "Pullback Calculations", "Volatility Calculations", "Visualize", "Alerts"]
     )
 
     with sessions_tab:
@@ -464,6 +464,91 @@ def sessions_page():
                 with top_cols[3]:
                     st.metric("Trigger Alert", "Yes" if detail.get("trigger_alert") else "No")
                 st.caption(f"Reset Reason: **{detail.get('reset_reason', '—')}**")
+                st.json(detail)
+
+    with volatility_tab:
+        st.subheader("Volatility Calculations")
+        list_cols = st.columns(4)
+        with list_cols[0]:
+            vc_session_id = st.number_input("Session ID", min_value=1, value=1, step=1, key="vc_session_id")
+        with list_cols[1]:
+            vc_limit = st.number_input("Limit", min_value=1, max_value=1000, value=100, step=10, key="vc_limit")
+        with list_cols[2]:
+            vc_offset = st.number_input("Offset", min_value=0, value=0, step=10, key="vc_offset")
+        with list_cols[3]:
+            st.write("")
+            if st.button("Get By Session", use_container_width=True, key="vc_get_all"):
+                try:
+                    session_volatility = api_client.list_volatility_calculations(
+                        session_id=int(vc_session_id),
+                        limit=int(vc_limit),
+                        offset=int(vc_offset),
+                    )
+                    st.session_state["volatility_calculations_list"] = session_volatility
+                    st.success(
+                        f"Loaded {len(session_volatility)} volatility calculation(s) for session #{int(vc_session_id)}."
+                    )
+                except APIError as e:
+                    st.error(f"Failed to list volatility calculations: {e.detail}")
+                except Exception as e:
+                    st.error(f"Connection error: {e}")
+
+        vc_detail_id = st.number_input(
+            "Volatility Calculation ID (Get One)", min_value=1, value=1, step=1, key="vc_detail_id"
+        )
+        if st.button("Get One", use_container_width=True, key="vc_get_one"):
+            try:
+                st.session_state["volatility_calculation_detail"] = api_client.get_volatility_calculation(
+                    int(vc_detail_id)
+                )
+            except APIError as e:
+                st.error(f"Failed to get volatility calculation: {e.detail}")
+            except Exception as e:
+                st.error(f"Connection error: {e}")
+
+        if "volatility_calculations_list" in st.session_state:
+            with st.container(border=True):
+                st.markdown("**Session Volatility Calculations**")
+                import pandas as pd
+
+                df = pd.DataFrame(st.session_state["volatility_calculations_list"])
+                for dt_col in ["calculated_at", "created_at", "updated_at"]:
+                    if dt_col in df.columns:
+                        df[dt_col] = df[dt_col].apply(_fmt_dt)
+
+                # Keep bias-style coloring if these fields exist in volatility payload.
+                bias_columns = [col for col in ["state_bias", "candidate_bias"] if col in df.columns]
+
+                def _bias_style(value):
+                    bias = str(value).upper()
+                    if bias == "BULLISH":
+                        return "color: #2ca02c; font-weight: 700;"
+                    if bias == "BEARISH":
+                        return "color: #d62728; font-weight: 700;"
+                    if bias == "NEUTRAL":
+                        return "color: #9aa0a6; font-weight: 700;"
+                    return ""
+
+                styled_df = df.style
+                if bias_columns:
+                    styled_df = styled_df.map(_bias_style, subset=bias_columns)
+
+                st.dataframe(styled_df, use_container_width=True, hide_index=True)
+
+        if "volatility_calculation_detail" in st.session_state:
+            detail = st.session_state["volatility_calculation_detail"]
+            with st.container(border=True):
+                st.markdown("**Volatility Calculation Detail**")
+                top_cols = st.columns(4)
+                with top_cols[0]:
+                    st.metric("ID", detail.get("id", "—"))
+                with top_cols[1]:
+                    st.metric("Session ID", detail.get("session_id", "—"))
+                with top_cols[2]:
+                    st.metric("Timeframe", detail.get("timeframe", "—"))
+                with top_cols[3]:
+                    calc_at = _fmt_dt(detail.get("calculated_at")) if detail.get("calculated_at") else "—"
+                    st.metric("Calculated At", calc_at)
                 st.json(detail)
 
     with visualize_tab:
@@ -862,6 +947,26 @@ def sessions_page():
                         st.metric("Touched SMA20", "Yes" if latest_pullback.get("touched_sma20") else "No")
                     st.caption(f"Reset Reason: **{latest_pullback.get('reset_reason', '—')}**")
                     st.json(latest_pullback)
+
+                # Volatility panel.
+                st.markdown("### Volatility")
+                latest_volatility = data.get("latest_volatility_calculation")
+                if latest_volatility:
+                    lv_cols = st.columns(5)
+                    with lv_cols[0]:
+                        st.metric("Status", latest_volatility.get("volatility_status", "—"))
+                    with lv_cols[1]:
+                        st.metric("ATR14", latest_volatility.get("atr14", "—"))
+                    with lv_cols[2]:
+                        st.metric("ATR14 SMA20", latest_volatility.get("atr14_sma20", "—"))
+                    with lv_cols[3]:
+                        st.metric("Vol Ratio", latest_volatility.get("vol_ratio", "—"))
+                    with lv_cols[4]:
+                        st.metric("Can Calculate", "Yes" if latest_volatility.get("can_calculate") else "No")
+                    st.caption(f"Reason: {latest_volatility.get('reason', '—')}")
+                    st.json(latest_volatility)
+                else:
+                    st.info("No latest volatility calculation available.")
 
                 # Alert panel.
                 st.markdown("### Alert")

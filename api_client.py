@@ -172,6 +172,24 @@ def list_pullback_calculations(session_id: int, limit: int = 100, offset: int = 
     return _handle_response(resp)
 
 
+# ── Volatility Calculations ──────────────────────────────────────────
+
+def get_volatility_calculation(volatility_calculation_id: int) -> dict:
+    resp = requests.get(
+        f"{BASE_URL}/api/volatility-calculations/detail",
+        params={"volatility_calculation_id": volatility_calculation_id},
+    )
+    return _handle_response(resp)
+
+
+def list_volatility_calculations(session_id: int, limit: int = 100, offset: int = 0) -> list[dict]:
+    resp = requests.get(
+        f"{BASE_URL}/api/volatility-calculations/",
+        params={"session_id": session_id, "limit": limit, "offset": offset},
+    )
+    return _handle_response(resp)
+
+
 # ── Alerts ───────────────────────────────────────────────────────────
 
 def create_alert(
