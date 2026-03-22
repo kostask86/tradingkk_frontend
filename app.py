@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import api_client
 from api_client import APIError
 from datetime import datetime, timezone
@@ -143,6 +144,10 @@ st.markdown(
         padding: 1rem;
         margin-bottom: 1rem;
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.3);
+        min-height: 190px;
+        height: 190px;
+        display: flex;
+        flex-direction: column;
     }
     .tcp-panel-label {
         font-size: 0.7rem;
@@ -371,6 +376,73 @@ st.markdown(
         border-radius: 12px;
         padding: 1rem;
         margin-bottom: 1.5rem;
+    }
+    .tcp-knob-panel {
+        background: linear-gradient(180deg, #252830 0%, #1a1d24 100%);
+        border: 1px solid rgba(70, 75, 85, 0.8);
+        border-radius: 10px;
+        padding: 1rem 1.5rem;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+        flex-wrap: wrap;
+    }
+    .tcp-knob-panel-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        color: #888;
+        margin-bottom: 0.5rem;
+        text-align: center;
+    }
+    .tcp-knob-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .tcp-knob-dial {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: linear-gradient(145deg, #2a2d35 0%, #1a1d24 50%, #252830 100%);
+        border: 3px solid #3b3f47;
+        box-shadow: inset 0 2px 6px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .tcp-knob-pointer {
+        width: 4px;
+        height: 28px;
+        background: linear-gradient(180deg, #f0ad4e 0%, #d4892a 100%);
+        border-radius: 2px;
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform-origin: 50% 32px;
+        transform: translateX(-50%) rotate(-135deg);
+        box-shadow: 0 0 6px rgba(240, 173, 78, 0.5);
+    }
+    .tcp-knob-value {
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: #f0c048;
+        letter-spacing: 0.05em;
+    }
+    .tcp-knob-slider-wrap {
+        width: 120px;
+        margin-top: 0.25rem;
+    }
+    .tcp-knob-slider-wrap input[type="range"] {
+        width: 100%;
+        height: 6px;
+        -webkit-appearance: none;
+        background: #1a1d24;
+        border-radius: 3px;
+        outline: none;
     }
     </style>
     """,
@@ -2501,7 +2573,137 @@ def provider_page():
                 st.json(cb_data)
 
 
+def _knob_html(initial_value: int) -> str:
+    return f"""
+    <style>
+        .knob-container {{ text-align: center; padding: 10px; }}
+        .knob-dial {{
+            width: 90px; height: 90px; margin: 0 auto 8px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #2a2d35 0%, #1a1d24 50%, #252830 100%);
+            border: 3px solid #3b3f47;
+            box-shadow: inset 0 2px 6px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
+            position: relative; cursor: grab; user-select: none;
+        }}
+        .knob-dial:active {{ cursor: grabbing; }}
+        .knob-pointer {{
+            width: 4px; height: 32px;
+            background: linear-gradient(180deg, #f0ad4e 0%, #d4892a 100%);
+            border-radius: 2px; position: absolute;
+            top: 6px; left: 50%;
+            transform-origin: 50% 39px;
+            transform: translateX(-50%) rotate(var(--angle, -135deg));
+            box-shadow: 0 0 6px rgba(240, 173, 78, 0.5);
+        }}
+        .knob-value {{ font-size: 1.2rem; font-weight: 800; color: #f0c048; letter-spacing: 0.05em; }}
+    </style>
+    <div class="knob-container">
+        <div class="tcp-knob-panel-label" style="font-size:0.7rem;color:#888;margin-bottom:6px;">SESSION ID KNOB</div>
+        <div class="knob-dial" id="knob" role="slider" aria-valuemin="1" aria-valuemax="10" tabindex="0">
+            <div class="knob-pointer" id="pointer"></div>
+        </div>
+        <div class="knob-value" id="value">{initial_value}</div>
+    </div>
+    <script>
+        (function() {{
+            const minVal = 1, maxVal = 10;
+            const startAngle = -135, endAngle = 135;
+            const angleRange = endAngle - startAngle;
+
+            function angleToValue(angle) {{
+                const pct = (angle - startAngle) / angleRange;
+                return Math.round(minVal + pct * (maxVal - minVal));
+            }}
+            function valueToAngle(val) {{
+                const pct = (val - minVal) / (maxVal - minVal);
+                return startAngle + pct * angleRange;
+            }}
+
+            const knob = document.getElementById('knob');
+            const pointer = document.getElementById('pointer');
+            const valueEl = document.getElementById('value');
+            const center = {{ x: 45, y: 45 }};
+
+            let value = Math.max(minVal, Math.min(maxVal, {initial_value}));
+            let isDragging = false;
+            let startY = 0, startValue = 0;
+
+            function updateDisplay() {{
+                value = Math.max(minVal, Math.min(maxVal, value));
+                const angle = valueToAngle(value);
+                pointer.style.setProperty('--angle', angle + 'deg');
+                pointer.style.transform = 'translateX(-50%) rotate(' + angle + 'deg)';
+                valueEl.textContent = value;
+            }}
+
+            function setFromEvent(e) {{
+                const rect = knob.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                const ex = e.clientX !== undefined ? e.clientX : e.touches[0].clientX;
+                const ey = e.clientY !== undefined ? e.clientY : e.touches[0].clientY;
+                const dx = ex - cx, dy = ey - cy;
+                let angle = Math.atan2(dx, -dy) * 180 / Math.PI;
+                angle = Math.max(startAngle, Math.min(endAngle, angle));
+                value = angleToValue(angle);
+                updateDisplay();
+            }}
+
+            function applyValue() {{
+                const url = new URL(window.top.location.href);
+                url.searchParams.set('tcp_knob', value);
+                window.top.location.href = url.toString();
+            }}
+
+            knob.addEventListener('mousedown', function(e) {{
+                e.preventDefault();
+                isDragging = true;
+                setFromEvent(e);
+            }});
+            knob.addEventListener('touchstart', function(e) {{
+                e.preventDefault();
+                isDragging = true;
+                setFromEvent(e);
+            }}, {{ passive: false }});
+
+            document.addEventListener('mousemove', function(e) {{
+                if (isDragging) setFromEvent(e);
+            }});
+            document.addEventListener('touchmove', function(e) {{
+                if (isDragging) {{ e.preventDefault(); setFromEvent(e); }}
+            }}, {{ passive: false }});
+
+            document.addEventListener('mouseup', function() {{
+                if (isDragging) {{ isDragging = false; applyValue(); }}
+            }});
+            document.addEventListener('touchend', function() {{
+                if (isDragging) {{ isDragging = false; applyValue(); }}
+            }});
+
+            knob.addEventListener('keydown', function(e) {{
+                if (e.key === 'ArrowUp' || e.key === 'Right') {{ value = Math.min(maxVal, value + 1); updateDisplay(); applyValue(); }}
+                else if (e.key === 'ArrowDown' || e.key === 'Left') {{ value = Math.max(minVal, value - 1); updateDisplay(); applyValue(); }}
+            }});
+
+            updateDisplay();
+        }})();
+    </script>
+    """
+
+
 def trading_control_panel_page():
+    # Read knob value from URL if present (from drag-to-rotate)
+    qp = dict(st.query_params)
+    if "tcp_knob" in qp:
+        try:
+            v = int(qp["tcp_knob"])
+            if 1 <= v <= 10:
+                st.session_state["tcp_session_knob"] = v
+                del qp["tcp_knob"]
+                st.query_params.update(qp)
+        except (ValueError, TypeError):
+            pass
+
     backend_ok = False
     try:
         api_client.health_check()
@@ -2606,6 +2808,10 @@ def trading_control_panel_page():
         vol_ratio = "—"
 
     alert_text = "NO ALERT" if not latest_alert or latest_alert.get("outcome_status") != "OPEN" else f"{latest_alert.get('direction', '—')} @ {latest_alert.get('entry_signal_price', '—')}"
+    alert_color = "#f0c048"  # amber: no alert
+    if latest_alert and latest_alert.get("outcome_status") == "OPEN":
+        direction = str(latest_alert.get("direction", "")).upper()
+        alert_color = "#22c55e" if direction == "LONG" else "#ef4444" if direction == "SHORT" else "#f0c048"
     pb_state = latest_pb.get("pullback_state", "NONE") if latest_pb else "NONE"
 
     bias_arrow_class = f"tcp-bias-arrow-{state_bias.lower()}"
@@ -2656,7 +2862,7 @@ def trading_control_panel_page():
             <div class="tcp-panel">
                 <div class="tcp-panel-label">ALERT STATUS</div>
                 <div style="height: 90px; display: flex; align-items: center; justify-content: center;">
-                    <span style="font-size: 1.2rem; font-weight: 800; color: #f0c048;">{alert_text}</span>
+                    <span style="font-size: 1.2rem; font-weight: 800; color: {alert_color};">{alert_text}</span>
                 </div>
             </div>
             """,
@@ -2701,14 +2907,36 @@ def trading_control_panel_page():
                 f"""
             <div class="tcp-panel tcp-panel-controls">
                 <div class="tcp-panel-label">CONTROLS</div>
-                <div class="tcp-session-status">
-                    <span class="tcp-session-led {sess_led}"></span>
-                    <span class="tcp-session-status-text {sess_txt}">SESSION: {sess_status if sess_status != "—" else "NO SESSION"}</span>
+                <div style="height: 90px; display: flex; align-items: center; justify-content: center;">
+                    <div class="tcp-session-status">
+                        <span class="tcp-session-led {sess_led}"></span>
+                        <span class="tcp-session-status-text {sess_txt}">SESSION: {sess_status if sess_status != "—" else "NO SESSION"}</span>
+                    </div>
                 </div>
             </div>
             """,
                 unsafe_allow_html=True,
             )
+
+    # Knob panel - quick controls
+    if session_id_tcp and 1 <= session_id_tcp <= 10:
+        if st.session_state.get("tcp_session_knob") != session_id_tcp:
+            st.session_state["tcp_session_knob"] = session_id_tcp
+
+    knob_val = st.session_state.get("tcp_session_knob", 1)
+    knob_angle = -135 + (knob_val - 1) * 30
+
+    with st.container(border=True):
+        st.caption("Quick Controls")
+        kc_col1, kc_col2 = st.columns([1, 2])
+        with kc_col1:
+            components.html(_knob_html(knob_val), height=160, scrolling=False)
+        with kc_col2:
+            st.caption("Drag the knob to rotate • Selects session ID 1–10")
+
+    valid_session_ids = [s["id"] for s in active_sessions]
+    if knob_val in valid_session_ids:
+        st.session_state["tcp_session_select"] = knob_val
 
 
 def information_page():
