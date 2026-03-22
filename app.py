@@ -81,6 +81,297 @@ st.markdown(
         padding: 0.9rem 1rem;
         white-space: pre-wrap;
     }
+    .tcp-top-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: linear-gradient(180deg, #2a2d35 0%, #1a1d24 100%);
+        border: 1px solid rgba(80, 85, 95, 0.8);
+        border-radius: 8px;
+        padding: 1rem 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .tcp-title {
+        font-family: 'Segoe UI', 'Roboto', 'Oswald', 'Arial Black', sans-serif;
+        font-size: 1.6rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        color: #f0c048;
+        text-shadow: 0 0 12px rgba(240, 192, 72, 0.5);
+    }
+    .tcp-status {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .tcp-led {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+    }
+    .tcp-led-online {
+        background: #22c55e;
+        box-shadow: 0 0 8px #22c55e, 0 0 16px rgba(34, 197, 94, 0.6);
+    }
+    .tcp-led-offline {
+        background: #ef4444;
+        box-shadow: 0 0 8px #ef4444, 0 0 16px rgba(239, 68, 68, 0.6);
+    }
+    .tcp-status-text {
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+    }
+    .tcp-status-online {
+        color: #22c55e;
+    }
+    .tcp-status-offline {
+        color: #ef4444;
+    }
+    .tcp-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(2, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .tcp-panel {
+        background: linear-gradient(180deg, #252830 0%, #1a1d24 100%);
+        border: 1px solid rgba(70, 75, 85, 0.8);
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .tcp-panel-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        color: #888;
+        margin-bottom: 0.5rem;
+    }
+    .tcp-bias-gauge-wrap {
+        width: 100%;
+        height: 90px;
+        position: relative;
+    }
+    .tcp-bias-gauge {
+        width: 100%;
+        height: 65px;
+        position: relative;
+        background: linear-gradient(90deg, #ef4444 0%, #9aa0a6 50%, #22c55e 100%);
+        border-radius: 32px 32px 0 0;
+    }
+    .tcp-bias-gauge-inner {
+        position: absolute;
+        bottom: 5px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 72%;
+        height: 52px;
+        background: linear-gradient(180deg, #252830 0%, #1a1d24 100%);
+        border-radius: 26px 26px 0 0;
+    }
+    .tcp-bias-arrow {
+        position: absolute;
+        bottom: 2px;
+        left: 50%;
+        transform-origin: 50% 90%;
+        font-size: 1.4rem;
+        line-height: 1;
+        color: #22c55e;
+        text-shadow: 0 0 8px rgba(34, 197, 94, 0.8);
+    }
+    .tcp-bias-arrow-bearish { transform: translateX(-50%) rotate(-55deg); color: #ef4444; text-shadow: 0 0 8px rgba(239, 68, 68, 0.8); }
+    .tcp-bias-arrow-neutral { transform: translateX(-50%) rotate(0deg); color: #9aa0a6; text-shadow: 0 0 8px rgba(154, 160, 166, 0.6); }
+    .tcp-bias-arrow-bullish { transform: translateX(-50%) rotate(55deg); color: #22c55e; text-shadow: 0 0 8px rgba(34, 197, 94, 0.8); }
+    .tcp-bias-label {
+        text-align: center;
+        font-size: 0.9rem;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        margin-top: 0.25rem;
+    }
+    .tcp-bias-bullish { color: #22c55e; }
+    .tcp-bias-bearish { color: #ef4444; }
+    .tcp-bias-neutral { color: #9aa0a6; }
+    .tcp-pb-gauge-wrap {
+        width: 100%;
+        height: 90px;
+        position: relative;
+    }
+    .tcp-pb-gauge {
+        width: 100%;
+        height: 65px;
+        position: relative;
+        background: linear-gradient(90deg, #ef4444 0%, #ef4444 33%, #f0ad4e 33%, #f0ad4e 66%, #3b82f6 66%, #3b82f6 100%);
+        border-radius: 32px 32px 0 0;
+    }
+    .tcp-pb-gauge-inner {
+        position: absolute;
+        bottom: 5px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 72%;
+        height: 52px;
+        background: linear-gradient(180deg, #252830 0%, #1a1d24 100%);
+        border-radius: 26px 26px 0 0;
+    }
+    .tcp-pb-gauge-labels {
+        position: absolute;
+        bottom: 12px;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: space-between;
+        padding: 0 8%;
+        font-size: 0.58rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        color: rgba(255,255,255,0.9);
+        pointer-events: none;
+    }
+    .tcp-pb-arrow {
+        position: absolute;
+        bottom: 2px;
+        left: 50%;
+        transform-origin: 50% 90%;
+        font-size: 1.4rem;
+        line-height: 1;
+        color: #f0ad4e;
+        text-shadow: 0 0 8px rgba(240, 173, 78, 0.8);
+    }
+    .tcp-pb-arrow-invalid { transform: translateX(-50%) rotate(-55deg); color: #ef4444; text-shadow: 0 0 8px rgba(239, 68, 68, 0.8); }
+    .tcp-pb-arrow-ready { transform: translateX(-50%) rotate(0deg); color: #f0ad4e; text-shadow: 0 0 8px rgba(240, 173, 78, 0.8); }
+    .tcp-pb-arrow-forming { transform: translateX(-50%) rotate(55deg); color: #3b82f6; text-shadow: 0 0 8px rgba(59, 130, 246, 0.8); }
+    .tcp-pb-label {
+        text-align: center;
+        font-size: 0.85rem;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        margin-top: 0.25rem;
+    }
+    .tcp-pb-label-invalid { color: #ef4444; }
+    .tcp-pb-label-ready { color: #f0ad4e; }
+    .tcp-pb-label-forming { color: #3b82f6; }
+    .tcp-pb-label-none { color: #9aa0a6; }
+    .tcp-vol-lights {
+        display: flex;
+        justify-content: center;
+        gap: 0.6rem;
+        margin: 0.5rem 0;
+    }
+    .tcp-vol-light {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+    }
+    .tcp-vol-light-low { background: #3b82f6; }
+    .tcp-vol-light-normal { background: #22c55e; }
+    .tcp-vol-light-high { background: #ef4444; }
+    .tcp-vol-light-active { box-shadow: 0 0 10px currentColor, 0 0 20px currentColor; }
+    .tcp-vol-light-low.tcp-vol-light-active { color: #3b82f6; }
+    .tcp-vol-light-normal.tcp-vol-light-active { color: #22c55e; }
+    .tcp-vol-light-high.tcp-vol-light-active { color: #ef4444; }
+    .tcp-vol-data {
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        color: #f0c048;
+        text-align: center;
+    }
+    .tcp-control-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+    .tcp-control-label-wrap {
+        display: flex;
+        align-items: center;
+        min-height: 38px;
+    }
+    .tcp-control-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        color: #888;
+        min-width: 72px;
+    }
+    .tcp-session-status {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-top: 0.9rem;
+        padding: 0.55rem 0.85rem;
+        background: rgba(0,0,0,0.35);
+        border-radius: 8px;
+        border: 1px solid rgba(70,75,85,0.6);
+    }
+    .tcp-session-led {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+    }
+    .tcp-session-led-active { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+    .tcp-session-led-paused { background: #f0ad4e; box-shadow: 0 0 8px #f0ad4e; }
+    .tcp-session-led-completed { background: #6c757d; box-shadow: 0 0 6px #6c757d; }
+    .tcp-session-led-none { background: #555; }
+    .tcp-session-status-text {
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+    }
+    .tcp-session-status-active { color: #22c55e; }
+    .tcp-session-status-paused { color: #f0ad4e; }
+    .tcp-session-status-completed { color: #9aa0a6; }
+    .tcp-session-status-none { color: #666; }
+    .tcp-controls-inner {
+        padding-top: 0.25rem;
+    }
+    .tcp-panel-controls .stRadio > div {
+        flex-direction: row !important;
+        gap: 0 !important;
+        background: #0d0f12 !important;
+        border-radius: 22px !important;
+        padding: 4px !important;
+        border: 1px solid rgba(70,75,85,0.6) !important;
+        width: fit-content !important;
+    }
+    .tcp-panel-controls .stRadio label {
+        background: transparent !important;
+        color: #666 !important;
+        padding: 5px 16px !important;
+        border-radius: 18px !important;
+        font-size: 0.72rem !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.06em !important;
+        margin: 0 2px !important;
+        transition: all 0.2s ease !important;
+    }
+    .tcp-panel-controls .stRadio label:hover { color: #9aa0a6 !important; }
+    .tcp-panel-controls .stRadio label:has(input:checked) {
+        background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%) !important;
+        color: #fff !important;
+        box-shadow: 0 0 10px rgba(34, 197, 94, 0.4) !important;
+    }
+    .tcp-panel-controls .stRadio label:first-of-type:has(input:checked) {
+        background: linear-gradient(180deg, #3b3f47 0%, #2a2d33 100%) !important;
+        color: #9aa0a6 !important;
+        box-shadow: none !important;
+    }
+    .tcp-control-row-refresh {
+        margin-bottom: 0.5rem;
+    }
+    .tcp-control-row-refresh .tcp-control-label { margin-bottom: 0; min-width: auto; }
+    .tcp-master-panel {
+        background: rgba(20, 22, 28, 0.6);
+        border: 1px solid rgba(70, 75, 85, 0.6);
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -106,6 +397,17 @@ def _bias_colored_html(value: str | None) -> str:
     }
     color = color_map.get(bias, "#9aa0a6")
     return f"<span style='color: {color}; font-weight: 700;'>{bias}</span>"
+
+
+def _volatility_status_colored_html(value: str | None) -> str:
+    status = (value or "—").upper()
+    color_map = {
+        "LOW": "#9aa0a6",
+        "NORMAL": "#2ca02c",
+        "HIGH": "#d62728",
+    }
+    color = color_map.get(status, "#9aa0a6")
+    return f"<span style='color: {color}; font-weight: 700;'>{status}</span>"
 
 
 def _parse_dt(value: str | None) -> datetime | None:
@@ -156,13 +458,48 @@ def _system_clock_widget() -> None:
 
 
 @st.fragment(run_every="1s")
-def _visualize_auto_refresh_fragment() -> None:
+def _tcp_auto_refresh_fragment() -> None:
+    if not st.session_state.get("tcp_auto_refresh_enabled", False):
+        return
+
+    cfg = st.session_state.get("tcp_auto_refresh_cfg")
+    if not isinstance(cfg, dict):
+        return
+
+    session_id = cfg.get("session_id")
+    timeframe = cfg.get("timeframe", "1m")
+    interval_seconds = int(cfg.get("interval_seconds", _refresh_seconds_for_timeframe(timeframe)))
+    last_fetch_ts = float(st.session_state.get("tcp_last_fetch_ts", 0.0))
+
+    elapsed = max(0.0, time.time() - last_fetch_ts)
+    remaining = max(0, int(interval_seconds - elapsed))
+    st.caption(
+        f"Auto-refresh ON | Session #{session_id} | TF: {timeframe} | "
+        f"Every {interval_seconds}s | Next in {remaining}s"
+    )
+
+    if elapsed < interval_seconds:
+        return
+
+    try:
+        panel_result = api_client.get_trading_control_panel(int(session_id))
+        st.session_state["tcp_panel_result"] = panel_result
+        st.session_state["tcp_last_fetch_ts"] = time.time()
+        st.session_state.pop("tcp_error", None)
+        st.rerun()
+    except Exception:
+        st.session_state["tcp_last_fetch_ts"] = time.time()
+
+
+@st.fragment(run_every="1s")
+def _visualize_auto_refresh_fragment(show_caption: bool = False) -> None:
     if not st.session_state.get("viz_auto_refresh_enabled", False):
         return
 
     cfg = st.session_state.get("visualize_auto_refresh_cfg")
     if not isinstance(cfg, dict):
-        st.caption("Auto-refresh is enabled. Run Visualize once to start polling.")
+        if show_caption:
+            st.caption("Auto-refresh is enabled. Run Visualize once to start polling.")
         return
 
     session_id = cfg.get("session_id")
@@ -173,10 +510,11 @@ def _visualize_auto_refresh_fragment() -> None:
 
     elapsed = max(0.0, time.time() - last_fetch_ts)
     remaining = max(0, int(interval_seconds - elapsed))
-    st.caption(
-        f"Auto-refresh ON | Session #{session_id} | TF: {timeframe} | "
-        f"Every {interval_seconds}s | Next in {remaining}s"
-    )
+    if show_caption:
+        st.caption(
+            f"Auto-refresh ON | Session #{session_id} | TF: {timeframe} | "
+            f"Every {interval_seconds}s | Next in {remaining}s"
+        )
 
     if elapsed < interval_seconds:
         return
@@ -220,15 +558,30 @@ with st.sidebar:
         st.error("Backend unreachable (localhost:8000)")
 
     st.divider()
-    page = st.radio("Navigation", ["Sessions", "Provider", "Information"], index=0, label_visibility="collapsed")
+    if "nav_page" not in st.session_state:
+        st.session_state["nav_page"] = "Trading Control Panel"
+
+    nav_pages = ["Trading Control Panel", "Session", "Provider", "Information"]
+    for p in nav_pages:
+        is_selected = st.session_state["nav_page"] == p
+        if st.button(
+            p,
+            key=f"nav_{p}",
+            use_container_width=True,
+            type="primary" if is_selected else "secondary",
+        ):
+            st.session_state["nav_page"] = p
+            st.rerun()
+
+    page = st.session_state["nav_page"]
 
 
 # ── Sessions page ─────────────────────────────────────────────────────
 
 def sessions_page():
-    st.header("Sessions")
+    st.header("Session")
     sessions_tab, bias_tab, pullback_tab, volatility_tab, visualize_tab, alerts_tab = st.tabs(
-        ["Sessions", "Bias Calculations", "Pullback Calculations", "Volatility Calculations", "Visualize", "Alerts"]
+        ["Session", "Bias Calculations", "Pullback Calculations", "Volatility Calculations", "Visualize", "Alerts"]
     )
 
     with sessions_tab:
@@ -518,6 +871,7 @@ def sessions_page():
 
                 # Keep bias-style coloring if these fields exist in volatility payload.
                 bias_columns = [col for col in ["state_bias", "candidate_bias"] if col in df.columns]
+                vol_status_cols = [col for col in ["volatility_status"] if col in df.columns]
 
                 def _bias_style(value):
                     bias = str(value).upper()
@@ -529,9 +883,21 @@ def sessions_page():
                         return "color: #9aa0a6; font-weight: 700;"
                     return ""
 
+                def _volatility_status_style(value):
+                    s = str(value).upper()
+                    if s == "LOW":
+                        return "color: #9aa0a6; font-weight: 700;"
+                    if s == "NORMAL":
+                        return "color: #2ca02c; font-weight: 700;"
+                    if s == "HIGH":
+                        return "color: #d62728; font-weight: 700;"
+                    return ""
+
                 styled_df = df.style
                 if bias_columns:
                     styled_df = styled_df.map(_bias_style, subset=bias_columns)
+                if vol_status_cols:
+                    styled_df = styled_df.map(_volatility_status_style, subset=vol_status_cols)
 
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
@@ -539,14 +905,19 @@ def sessions_page():
             detail = st.session_state["volatility_calculation_detail"]
             with st.container(border=True):
                 st.markdown("**Volatility Calculation Detail**")
-                top_cols = st.columns(4)
+                top_cols = st.columns(5)
                 with top_cols[0]:
                     st.metric("ID", detail.get("id", "—"))
                 with top_cols[1]:
                     st.metric("Session ID", detail.get("session_id", "—"))
                 with top_cols[2]:
-                    st.metric("Timeframe", detail.get("timeframe", "—"))
+                    st.markdown(
+                        f"**Volatility Status**<br>{_volatility_status_colored_html(detail.get('volatility_status'))}",
+                        unsafe_allow_html=True,
+                    )
                 with top_cols[3]:
+                    st.metric("Timeframe", detail.get("timeframe", "—"))
+                with top_cols[4]:
                     calc_at = _fmt_dt(detail.get("calculated_at")) if detail.get("calculated_at") else "—"
                     st.metric("Calculated At", calc_at)
                 st.json(detail)
@@ -556,6 +927,7 @@ def sessions_page():
         ctrl_cols = st.columns([1, 1, 3])
         with ctrl_cols[0]:
             st.toggle("Auto Refresh", key="viz_auto_refresh_enabled")
+            _visualize_auto_refresh_fragment(show_caption=True)
         with ctrl_cols[1]:
             if st.button("Refresh now", key="viz_refresh_now", use_container_width=True):
                 cfg = st.session_state.get("visualize_auto_refresh_cfg")
@@ -581,8 +953,6 @@ def sessions_page():
         with ctrl_cols[2]:
             if st.session_state.get("visualize_auto_refresh_error"):
                 st.warning(st.session_state["visualize_auto_refresh_error"])
-
-        _visualize_auto_refresh_fragment()
 
         with st.container(border=True):
             with st.form("visualize_session_form"):
@@ -954,7 +1324,10 @@ def sessions_page():
                 if latest_volatility:
                     lv_cols = st.columns(5)
                     with lv_cols[0]:
-                        st.metric("Status", latest_volatility.get("volatility_status", "—"))
+                        st.markdown(
+                            f"**Status**<br>{_volatility_status_colored_html(latest_volatility.get('volatility_status'))}",
+                            unsafe_allow_html=True,
+                        )
                     with lv_cols[1]:
                         st.metric("ATR14", latest_volatility.get("atr14", "—"))
                     with lv_cols[2]:
@@ -2128,6 +2501,216 @@ def provider_page():
                 st.json(cb_data)
 
 
+def trading_control_panel_page():
+    backend_ok = False
+    try:
+        api_client.health_check()
+        backend_ok = True
+    except Exception:
+        pass
+
+    led_class = "tcp-led-online" if backend_ok else "tcp-led-offline"
+    status_class = "tcp-status-online" if backend_ok else "tcp-status-offline"
+    status_text = "SYSTEM ONLINE" if backend_ok else "SYSTEM OFFLINE"
+
+    st.markdown(
+        f"""
+        <div class="tcp-top-bar">
+            <div style="width: 140px;"></div>
+            <div class="tcp-title">TRADING CONTROL PANEL</div>
+            <div class="tcp-status">
+                <span class="tcp-led {led_class}"></span>
+                <span class="tcp-status-text {status_class}">{status_text}</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    sessions_for_tcp = []
+    try:
+        sessions_for_tcp = api_client.list_sessions(limit=50) if backend_ok else []
+    except Exception:
+        pass
+    active_sessions = [s for s in sessions_for_tcp if s.get("status") in ("ACTIVE", "PAUSED")]
+    session_options = [(0, "— No session —")] + [(int(s["id"]), f"#{s['id']} {s['symbol']} ({s['status']})") for s in active_sessions]
+    session_id_tcp = st.selectbox(
+        "Session",
+        options=[o[0] for o in session_options],
+        format_func=lambda x: next((o[1] for o in session_options if o[0] == x), str(x)),
+        key="tcp_session_select",
+    )
+    st.caption("Auto Refresh")
+    auto_on = st.session_state.get("tcp_auto_refresh_enabled", False)
+    pill_val = st.radio(
+        "Auto Refresh",
+        options=["OFF", "ON"],
+        index=1 if auto_on else 0,
+        key="tcp_auto_refresh_slider",
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+    st.session_state["tcp_auto_refresh_enabled"] = (pill_val == "ON")
+    if not session_id_tcp:
+        st.session_state.pop("tcp_panel_result", None)
+        st.session_state.pop("tcp_auto_refresh_cfg", None)
+    elif session_id_tcp:
+        selected_session = next((s for s in active_sessions if s.get("id") == session_id_tcp), None)
+        tcp_timeframe = (selected_session or {}).get("timeframe", "1m")
+        tcp_cfg = st.session_state.get("tcp_auto_refresh_cfg")
+        if not isinstance(tcp_cfg, dict) or tcp_cfg.get("session_id") != int(session_id_tcp):
+            st.session_state["tcp_auto_refresh_cfg"] = {
+                "session_id": int(session_id_tcp),
+                "timeframe": tcp_timeframe,
+                "interval_seconds": _refresh_seconds_for_timeframe(tcp_timeframe),
+            }
+    _tcp_auto_refresh_fragment()
+    panel_data = st.session_state.get("tcp_panel_result")
+    need_fetch = session_id_tcp and backend_ok and (
+        not panel_data or panel_data.get("session_id") != session_id_tcp
+    )
+    if need_fetch:
+        try:
+            panel = api_client.get_trading_control_panel(int(session_id_tcp))
+            if panel and panel.get("session_id") == session_id_tcp:
+                st.session_state["tcp_panel_result"] = panel
+                st.session_state["tcp_last_fetch_ts"] = time.time()
+                st.session_state.pop("tcp_error", None)
+                panel_data = panel
+            else:
+                st.session_state["tcp_error"] = "Cannot get data"
+                st.session_state.pop("tcp_panel_result", None)
+        except APIError as e:
+            st.session_state["tcp_error"] = f"Cannot get data: {e.detail}"
+            st.session_state.pop("tcp_panel_result", None)
+        except Exception:
+            st.session_state["tcp_error"] = "Cannot get data"
+            st.session_state.pop("tcp_panel_result", None)
+
+    if st.session_state.get("tcp_error"):
+        st.error(st.session_state["tcp_error"])
+
+    panel_data = st.session_state.get("tcp_panel_result")
+
+    sess_status = "—" if not session_id_tcp else str((panel_data or {}).get("session_status") or "—").upper()
+    state_bias = (panel_data or {}).get("state_bias") or "NEUTRAL"
+    state_bias = str(state_bias).upper()
+    lv = (panel_data or {}).get("latest_volatility_calculation") or {}
+    latest_alert = (panel_data or {}).get("latest_alert")
+    latest_pb = (panel_data or {}).get("latest_pullback_calculation") or {}
+    vol_status = (lv.get("volatility_status") or "NORMAL").upper()
+    vr = lv.get("vol_ratio")
+    try:
+        vol_ratio = f"{float(vr):.2f}" if vr is not None else "—"
+    except (TypeError, ValueError):
+        vol_ratio = "—"
+
+    alert_text = "NO ALERT" if not latest_alert or latest_alert.get("outcome_status") != "OPEN" else f"{latest_alert.get('direction', '—')} @ {latest_alert.get('entry_signal_price', '—')}"
+    pb_state = latest_pb.get("pullback_state", "NONE") if latest_pb else "NONE"
+
+    bias_arrow_class = f"tcp-bias-arrow-{state_bias.lower()}"
+    bias_label_class = f"tcp-bias-{state_bias.lower()}"
+
+    low_active = " tcp-vol-light-active" if vol_status == "LOW" else ""
+    norm_active = " tcp-vol-light-active" if vol_status == "NORMAL" else ""
+    high_active = " tcp-vol-light-active" if vol_status == "HIGH" else ""
+
+    with st.container(border=True):
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.markdown(
+                f"""
+            <div class="tcp-panel">
+                <div class="tcp-panel-label">STATE BIAS</div>
+                <div class="tcp-bias-gauge-wrap">
+                    <div class="tcp-bias-gauge">
+                        <div class="tcp-bias-gauge-inner"></div>
+                        <div class="tcp-bias-arrow {bias_arrow_class}">▲</div>
+                    </div>
+                </div>
+                <div class="tcp-bias-label {bias_label_class}">{state_bias}</div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f"""
+            <div class="tcp-panel">
+                <div class="tcp-panel-label">VOLATILITY</div>
+                <div class="tcp-vol-lights">
+                    <span class="tcp-vol-light tcp-vol-light-low{low_active}" title="LOW"></span>
+                    <span class="tcp-vol-light tcp-vol-light-normal{norm_active}" title="NORMAL"></span>
+                    <span class="tcp-vol-light tcp-vol-light-high{high_active}" title="HIGH"></span>
+                </div>
+                <div class="tcp-vol-data">VOL RATIO {vol_ratio}</div>
+                <div class="tcp-vol-data">STATUS: {vol_status}</div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
+
+        with col2:
+            st.markdown(
+                f"""
+            <div class="tcp-panel">
+                <div class="tcp-panel-label">ALERT STATUS</div>
+                <div style="height: 90px; display: flex; align-items: center; justify-content: center;">
+                    <span style="font-size: 1.2rem; font-weight: 800; color: #f0c048;">{alert_text}</span>
+                </div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                """
+            <div class="tcp-panel">
+                <div class="tcp-panel-label">TREND</div>
+                <div style="height: 90px; display: flex; align-items: center; justify-content: center;">
+                    <span style="font-size: 0.85rem; color: #888;">—</span>
+                </div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
+
+        with col3:
+            pb_state_upper = str(pb_state).upper()
+            if pb_state_upper == "NONE":
+                st.markdown(
+                '<div class="tcp-panel"><div class="tcp-panel-label">PULLBACK STATUS</div>'
+                '<div class="tcp-pb-gauge-wrap" style="display:flex;align-items:center;justify-content:center;min-height:90px;">'
+                    '<span class="tcp-pb-label tcp-pb-label-none">NONE</span></div></div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                pb_arrow_class = "tcp-pb-arrow-invalid" if pb_state_upper == "INVALID" else "tcp-pb-arrow-ready" if pb_state_upper == "READY" else "tcp-pb-arrow-forming"
+                pb_label_class = "tcp-pb-label-invalid" if pb_state_upper == "INVALID" else "tcp-pb-label-ready" if pb_state_upper == "READY" else "tcp-pb-label-forming"
+                st.markdown(
+                f'<div class="tcp-panel"><div class="tcp-panel-label">PULLBACK STATUS</div>'
+                f'<div class="tcp-pb-gauge-wrap"><div class="tcp-pb-gauge"><div class="tcp-pb-gauge-inner"></div>'
+                f'<div class="tcp-pb-gauge-labels"><span>INVALID</span><span>READY</span><span>FORMING</span></div>'
+                f'<div class="tcp-pb-arrow {pb_arrow_class}">&#9650;</div></div>'
+                    f'<div class="tcp-pb-label {pb_label_class}">{pb_state_upper}</div></div></div>',
+                    unsafe_allow_html=True,
+                )
+            sess_led = "tcp-session-led-active" if sess_status == "ACTIVE" else "tcp-session-led-paused" if sess_status == "PAUSED" else "tcp-session-led-completed" if sess_status == "COMPLETED" else "tcp-session-led-none"
+            sess_txt = "tcp-session-status-active" if sess_status == "ACTIVE" else "tcp-session-status-paused" if sess_status == "PAUSED" else "tcp-session-status-completed" if sess_status == "COMPLETED" else "tcp-session-status-none"
+
+            st.markdown(
+                f"""
+            <div class="tcp-panel tcp-panel-controls">
+                <div class="tcp-panel-label">CONTROLS</div>
+                <div class="tcp-session-status">
+                    <span class="tcp-session-led {sess_led}"></span>
+                    <span class="tcp-session-status-text {sess_txt}">SESSION: {sess_status if sess_status != "—" else "NO SESSION"}</span>
+                </div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
+
+
 def information_page():
     import html
     import json
@@ -2160,7 +2743,7 @@ def information_page():
             st.info("No information returned yet.")
             return
 
-        strategy_sections = ["session", "bias_calculation", "pullback_calculation", "alert"]
+        strategy_sections = ["session", "bias_calculation", "pullback_calculation", "volatility_calculation", "alert"]
         has_strategy_text_payload = all(
             isinstance(info.get(section), str) for section in strategy_sections if section in info
         ) and any(section in info for section in strategy_sections)
@@ -2181,6 +2764,7 @@ def information_page():
                 "session": "Session",
                 "bias_calculation": "Bias Calculation",
                 "pullback_calculation": "Pullback Calculation",
+                "volatility_calculation": "Volatility Calculation",
                 "alert": "Alert",
             }
 
@@ -2357,11 +2941,14 @@ def information_page():
 
 # ── Router ────────────────────────────────────────────────────────────
 
-if page == "Sessions":
+if page == "Trading Control Panel":
+    trading_control_panel_page()
+elif page == "Session":
     sessions_page()
 elif page == "Provider":
     provider_page()
 elif page == "Information":
     information_page()
 
+_visualize_auto_refresh_fragment(show_caption=False)
 _system_clock_widget()

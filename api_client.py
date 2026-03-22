@@ -115,6 +115,14 @@ def get_alert_performance(session_id: int) -> dict:
     return _handle_response(resp)
 
 
+def get_trading_control_panel(session_id: int) -> dict:
+    resp = requests.get(
+        f"{BASE_URL}/api/sessions/tradingcontrolpanel",
+        params={"session_id": session_id},
+    )
+    return _handle_response(resp)
+
+
 def get_session_metadata(session_id: int) -> dict:
     resp = requests.get(
         f"{BASE_URL}/api/sessions/metadata",
