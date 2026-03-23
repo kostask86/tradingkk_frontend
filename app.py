@@ -657,6 +657,8 @@ def _tcp_auto_refresh_fragment() -> None:
         return
 
     try:
+        session_detail = api_client.get_session(int(session_id))
+        st.session_state["tcp_session_detail"] = session_detail if isinstance(session_detail, dict) else {}
         panel_result = api_client.get_trading_control_panel(int(session_id))
         st.session_state["tcp_panel_result"] = panel_result
         st.session_state["tcp_last_fetch_ts"] = time.time()
