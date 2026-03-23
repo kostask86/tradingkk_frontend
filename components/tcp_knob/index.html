@@ -1,0 +1,167 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://unpkg.com/streamlit-component-lib@1.4.0/dist/index.js"></script>
+    <style>
+      body {
+        margin: 0;
+        background: transparent;
+        color: #e5e7eb;
+        font-family: "Segoe UI", sans-serif;
+      }
+      .wrap {
+        text-align: center;
+        padding: 8px 0;
+      }
+      .label {
+        font-size: 0.7rem;
+        color: #888;
+        letter-spacing: 0.08em;
+        margin-bottom: 6px;
+        font-weight: 700;
+      }
+      .dial {
+        width: 92px;
+        height: 92px;
+        margin: 0 auto 8px;
+        border-radius: 50%;
+        background: linear-gradient(145deg, #2a2d35 0%, #1a1d24 50%, #252830 100%);
+        border: 3px solid #3b3f47;
+        box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+        position: relative;
+        cursor: grab;
+        user-select: none;
+      }
+      .dial:active {
+        cursor: grabbing;
+      }
+      .pointer {
+        width: 4px;
+        height: 32px;
+        background: linear-gradient(180deg, #f0ad4e 0%, #d4892a 100%);
+        border-radius: 2px;
+        position: absolute;
+        top: 6px;
+        left: 50%;
+        transform-origin: 50% 39px;
+        box-shadow: 0 0 6px rgba(240, 173, 78, 0.5);
+      }
+      .value {
+        font-size: 1.2rem;
+        font-weight: 800;
+        color: #f0c048;
+        letter-spacing: 0.05em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="label">SESSION ID</div>
+      <div class="dial" id="knob" tabindex="0" role="slider" aria-valuemin="1" aria-valuemax="10">
+        <div class="pointer" id="pointer"></div>
+      </div>
+      <div class="value" id="value">1</div>
+    </div>
+    <script>
+      const knob = document.getElementById("knob");
+      const pointer = document.getElementById("pointer");
+      const valueEl = document.getElementById("value");
+
+      const startAngle = -135;
+      const endAngle = 135;
+      const angleRange = endAngle - startAngle;
+      let minVal = 1;
+      let maxVal = 10;
+      let value = 1;
+      let isDragging = false;
+
+      function valueToAngle(v) {
+        const pct = (v - minVal) / (maxVal - minVal);
+        return startAngle + pct * angleRange;
+      }
+
+      function angleToValue(a) {
+        const pct = (a - startAngle) / angleRange;
+        return Math.round(minVal + pct * (maxVal - minVal));
+      }
+
+      function draw() {
+        value = Math.max(minVal, Math.min(maxVal, value));
+        const angle = valueToAngle(value);
+        pointer.style.transform = `translateX(-50%) rotate(${angle}deg)`;
+        valueEl.textContent = String(value);
+        knob.setAttribute("aria-valuenow", String(value));
+      }
+
+      function setFromPointerEvent(e) {
+        const rect = knob.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const dx = e.clientX - cx;
+        const dy = e.clientY - cy;
+        let angle = (Math.atan2(dx, -dy) * 180) / Math.PI;
+        angle = Math.max(startAngle, Math.min(endAngle, angle));
+        value = angleToValue(angle);
+        draw();
+      }
+
+      function commitValue() {
+        window.Streamlit.setComponentValue(value);
+      }
+
+      knob.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        isDragging = true;
+        if (knob.setPointerCapture) knob.setPointerCapture(e.pointerId);
+        setFromPointerEvent(e);
+      });
+
+      knob.addEventListener("pointermove", (e) => {
+        if (!isDragging) return;
+        setFromPointerEvent(e);
+      });
+
+      knob.addEventListener("pointerup", (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        if (knob.releasePointerCapture) knob.releasePointerCapture(e.pointerId);
+        commitValue();
+      });
+
+      knob.addEventListener("pointercancel", (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        if (knob.releasePointerCapture) knob.releasePointerCapture(e.pointerId);
+        commitValue();
+      });
+
+      knob.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowUp" || e.key === "ArrowRight") {
+          value = Math.min(maxVal, value + 1);
+          draw();
+          commitValue();
+        } else if (e.key === "ArrowDown" || e.key === "ArrowLeft") {
+          value = Math.max(minVal, value - 1);
+          draw();
+          commitValue();
+        }
+      });
+
+      function onRender(event) {
+        const args = event.detail.args || {};
+        minVal = Number(args.min_value ?? 1);
+        maxVal = Number(args.max_value ?? 10);
+        const incoming = Number(args.value ?? args.default ?? 1);
+        value = Number.isFinite(incoming) ? incoming : 1;
+        draw();
+        window.Streamlit.setFrameHeight(160);
+      }
+
+      window.Streamlit.events.addEventListener(window.Streamlit.RENDER_EVENT, onRender);
+      window.Streamlit.setComponentReady();
+      window.Streamlit.setFrameHeight(160);
+    </script>
+  </body>
+</html>

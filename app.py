@@ -155,6 +155,7 @@ st.markdown(
         letter-spacing: 0.1em;
         color: #888;
         margin-bottom: 0.5rem;
+        text-align: center;
     }
     .tcp-bias-gauge-wrap {
         width: 100%;
@@ -286,6 +287,48 @@ st.markdown(
         color: #f0c048;
         text-align: center;
     }
+    .tcp-trend-wrap {
+        height: 90px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+    }
+    .tcp-trend-direction {
+        font-size: 0.9rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+    .tcp-trend-direction-bullish { color: #22c55e; text-shadow: 0 0 10px rgba(34,197,94,0.45); }
+    .tcp-trend-direction-bearish { color: #ef4444; text-shadow: 0 0 10px rgba(239,68,68,0.45); }
+    .tcp-trend-direction-neutral { color: #9aa0a6; }
+    .tcp-trend-level-badge {
+        font-size: 0.66rem;
+        font-weight: 800;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: #d5d9e0;
+        background: rgba(0,0,0,0.35);
+        border: 1px solid rgba(100,110,130,0.7);
+        border-radius: 999px;
+        padding: 0.2rem 0.55rem;
+    }
+    .tcp-trend-bars {
+        display: flex;
+        gap: 0.2rem;
+    }
+    .tcp-trend-bar {
+        width: 16px;
+        height: 6px;
+        border-radius: 2px;
+        background: #3a3f4a;
+        border: 1px solid rgba(130,140,160,0.35);
+    }
+    .tcp-trend-bar-active-bullish { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.55); }
+    .tcp-trend-bar-active-bearish { background: #ef4444; box-shadow: 0 0 8px rgba(239,68,68,0.55); }
+    .tcp-trend-bar-active-neutral { background: #9aa0a6; box-shadow: 0 0 6px rgba(154,160,166,0.45); }
     .tcp-control-row {
         display: flex;
         align-items: center;
@@ -323,6 +366,20 @@ st.markdown(
     .tcp-session-led-paused { background: #f0ad4e; box-shadow: 0 0 8px #f0ad4e; }
     .tcp-session-led-completed { background: #6c757d; box-shadow: 0 0 6px #6c757d; }
     .tcp-session-led-none { background: #555; }
+    .tcp-freeze-light {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    .tcp-freeze-light-on {
+        background: #3ab8ff;
+        box-shadow: 0 0 10px #3ab8ff, 0 0 18px rgba(58, 184, 255, 0.65);
+    }
+    .tcp-freeze-light-off {
+        background: #666;
+        box-shadow: 0 0 4px rgba(130, 130, 130, 0.35);
+    }
     .tcp-session-status-text {
         font-size: 0.8rem;
         font-weight: 700;
@@ -370,12 +427,58 @@ st.markdown(
         margin-bottom: 0.5rem;
     }
     .tcp-control-row-refresh .tcp-control-label { margin-bottom: 0; min-width: auto; }
+    .tcp-quick-retro-switch .stRadio > div {
+        flex-direction: row !important;
+        gap: 0 !important;
+        background: linear-gradient(180deg, #3a414d 0%, #1c212a 100%) !important;
+        border-radius: 8px !important;
+        padding: 4px !important;
+        border: 1px solid rgba(145, 155, 170, 0.55) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 2px 8px rgba(0,0,0,0.45) !important;
+        width: fit-content !important;
+    }
+    .tcp-quick-retro-switch .stRadio label {
+        background: transparent !important;
+        color: #9aa3b4 !important;
+        padding: 6px 18px !important;
+        border-radius: 6px !important;
+        border: 1px solid transparent !important;
+        font-size: 0.72rem !important;
+        font-weight: 800 !important;
+        letter-spacing: 0.08em !important;
+        margin: 0 2px !important;
+        text-transform: uppercase !important;
+        transition: all 0.16s ease !important;
+    }
+    .tcp-quick-retro-switch .stRadio label:has(input:checked) {
+        color: #ecf9ff !important;
+        border-color: rgba(69, 255, 204, 0.7) !important;
+        background: linear-gradient(180deg, #0f6b62 0%, #0a4a44 100%) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 0 12px rgba(69, 255, 204, 0.35) !important;
+    }
+    .tcp-quick-retro-switch .stRadio label:first-of-type:has(input:checked) {
+        color: #ffe6db !important;
+        border-color: rgba(255, 129, 102, 0.7) !important;
+        background: linear-gradient(180deg, #7a2c1f 0%, #4f1d14 100%) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 0 10px rgba(255, 129, 102, 0.3) !important;
+    }
     .tcp-master-panel {
         background: rgba(20, 22, 28, 0.6);
         border: 1px solid rgba(70, 75, 85, 0.6);
         border-radius: 12px;
         padding: 1rem;
         margin-bottom: 1.5rem;
+    }
+    .tcp-quick-subpanel-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        color: #888;
+        margin-bottom: 0.5rem;
+        text-align: center;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.tcp-quick-subpanel-label) {
+        min-height: 128px;
     }
     .tcp-knob-panel {
         background: linear-gradient(180deg, #252830 0%, #1a1d24 100%);
@@ -606,11 +709,11 @@ def _visualize_auto_refresh_fragment(show_caption: bool = False) -> None:
         # Fragment refresh alone does not redraw the outer visualize panel;
         # rerun app so chart/bias/pullback sections render the new payload.
         st.rerun()
-    except APIError as e:
-        st.session_state["visualize_auto_refresh_error"] = f"Auto-refresh failed: {e.detail}"
+    except APIError:
+        st.session_state["visualize_auto_refresh_error"] = f"No such session exists with id {session_id}"
         st.session_state["visualize_last_fetch_ts"] = time.time()
-    except Exception as e:
-        st.session_state["visualize_auto_refresh_error"] = f"Auto-refresh failed: {e}"
+    except Exception:
+        st.session_state["visualize_auto_refresh_error"] = f"No such session exists with id {session_id}"
         st.session_state["visualize_last_fetch_ts"] = time.time()
 
 
@@ -1004,22 +1107,23 @@ def sessions_page():
             if st.button("Refresh now", key="viz_refresh_now", use_container_width=True):
                 cfg = st.session_state.get("visualize_auto_refresh_cfg")
                 if isinstance(cfg, dict):
+                    cfg_session_id = int(cfg.get("session_id", 0))
                     try:
-                        viz_result = api_client.visualize_session(int(cfg.get("session_id")), int(cfg.get("num_bars", 200)))
+                        viz_result = api_client.visualize_session(cfg_session_id, int(cfg.get("num_bars", 200)))
                         st.session_state["session_visualization_result"] = viz_result
                         tf = viz_result.get("session", {}).get("timeframe", cfg.get("timeframe", "1m"))
                         st.session_state["visualize_auto_refresh_cfg"] = {
-                            "session_id": int(cfg.get("session_id")),
+                            "session_id": cfg_session_id,
                             "num_bars": int(cfg.get("num_bars", 200)),
                             "timeframe": tf,
                             "interval_seconds": _refresh_seconds_for_timeframe(tf),
                         }
                         st.session_state["visualize_last_fetch_ts"] = time.time()
                         st.session_state.pop("visualize_auto_refresh_error", None)
-                    except APIError as e:
-                        st.error(f"Refresh failed: {e.detail}")
-                    except Exception as e:
-                        st.error(f"Refresh failed: {e}")
+                    except APIError:
+                        st.error(f"No such session exists with id {cfg_session_id}")
+                    except Exception:
+                        st.error(f"No such session exists with id {cfg_session_id}")
                 else:
                     st.info("Run Visualize first to initialize refresh config.")
         with ctrl_cols[2]:
@@ -1047,10 +1151,10 @@ def sessions_page():
                         }
                         st.session_state["visualize_last_fetch_ts"] = time.time()
                         st.session_state.pop("visualize_auto_refresh_error", None)
-                    except APIError as e:
-                        st.error(f"Visualize failed: {e.detail}")
-                    except Exception as e:
-                        st.error(f"Connection error: {e}")
+                    except APIError:
+                        st.error(f"No such session exists with id {int(viz_session_id)}")
+                    except Exception:
+                        st.error(f"No such session exists with id {int(viz_session_id)}")
 
         if "session_visualization_result" in st.session_state:
             data = st.session_state["session_visualization_result"]
@@ -2598,11 +2702,14 @@ def _knob_html(initial_value: int) -> str:
         .knob-value {{ font-size: 1.2rem; font-weight: 800; color: #f0c048; letter-spacing: 0.05em; }}
     </style>
     <div class="knob-container">
-        <div class="tcp-knob-panel-label" style="font-size:0.7rem;color:#888;margin-bottom:6px;">SESSION ID KNOB</div>
+        <div class="tcp-knob-panel-label" style="font-size:0.7rem;color:#888;margin-bottom:6px;">SESSION ID</div>
         <div class="knob-dial" id="knob" role="slider" aria-valuemin="1" aria-valuemax="10" tabindex="0">
             <div class="knob-pointer" id="pointer"></div>
         </div>
         <div class="knob-value" id="value">{initial_value}</div>
+        <form id="knob-form" method="GET" target="_top" style="display:none;">
+            <input type="hidden" name="tcp_knob" id="knob-input" value="{initial_value}" />
+        </form>
     </div>
     <script>
         (function() {{
@@ -2622,11 +2729,10 @@ def _knob_html(initial_value: int) -> str:
             const knob = document.getElementById('knob');
             const pointer = document.getElementById('pointer');
             const valueEl = document.getElementById('value');
-            const center = {{ x: 45, y: 45 }};
-
+            const knobForm = document.getElementById('knob-form');
+            const knobInput = document.getElementById('knob-input');
             let value = Math.max(minVal, Math.min(maxVal, {initial_value}));
             let isDragging = false;
-            let startY = 0, startValue = 0;
 
             function updateDisplay() {{
                 value = Math.max(minVal, Math.min(maxVal, value));
@@ -2650,34 +2756,53 @@ def _knob_html(initial_value: int) -> str:
             }}
 
             function applyValue() {{
-                const url = new URL(window.top.location.href);
+                const targetWindow = window.top || window.parent || window;
+                const url = new URL(targetWindow.location.href);
                 url.searchParams.set('tcp_knob', value);
-                window.top.location.href = url.toString();
+                const nextUrl = url.toString();
+                // Streamlit renders components in an iframe; form submit is often the most reliable.
+                try {{
+                    knobInput.value = String(value);
+                    // Submit a single tcp_knob value (avoid duplicates from existing query).
+                    knobForm.action = url.pathname;
+                    knobForm.submit();
+                    return;
+                }} catch (err) {{}}
+                try {{
+                    window.open(nextUrl, "_top");
+                    return;
+                }} catch (err) {{}}
+                try {{
+                    targetWindow.location.assign(nextUrl);
+                    return;
+                }} catch (err) {{}}
+                try {{
+                    targetWindow.location.replace(nextUrl);
+                }} catch (err) {{}}
             }}
 
-            knob.addEventListener('mousedown', function(e) {{
+            knob.addEventListener('pointerdown', function(e) {{
                 e.preventDefault();
                 isDragging = true;
+                if (knob.setPointerCapture) knob.setPointerCapture(e.pointerId);
                 setFromEvent(e);
             }});
-            knob.addEventListener('touchstart', function(e) {{
-                e.preventDefault();
-                isDragging = true;
-                setFromEvent(e);
-            }}, {{ passive: false }});
-
-            document.addEventListener('mousemove', function(e) {{
+            knob.addEventListener('pointermove', function(e) {{
                 if (isDragging) setFromEvent(e);
             }});
-            document.addEventListener('touchmove', function(e) {{
-                if (isDragging) {{ e.preventDefault(); setFromEvent(e); }}
-            }}, {{ passive: false }});
-
-            document.addEventListener('mouseup', function() {{
-                if (isDragging) {{ isDragging = false; applyValue(); }}
+            knob.addEventListener('pointerup', function(e) {{
+                if (isDragging) {{
+                    isDragging = false;
+                    if (knob.releasePointerCapture) knob.releasePointerCapture(e.pointerId);
+                    applyValue();
+                }}
             }});
-            document.addEventListener('touchend', function() {{
-                if (isDragging) {{ isDragging = false; applyValue(); }}
+            knob.addEventListener('pointercancel', function(e) {{
+                if (isDragging) {{
+                    isDragging = false;
+                    if (knob.releasePointerCapture) knob.releasePointerCapture(e.pointerId);
+                    applyValue();
+                }}
             }});
 
             knob.addEventListener('keydown', function(e) {{
@@ -2692,17 +2817,9 @@ def _knob_html(initial_value: int) -> str:
 
 
 def trading_control_panel_page():
-    # Read knob value from URL if present (from drag-to-rotate)
-    qp = dict(st.query_params)
-    if "tcp_knob" in qp:
-        try:
-            v = int(qp["tcp_knob"])
-            if 1 <= v <= 10:
-                st.session_state["tcp_session_knob"] = v
-                del qp["tcp_knob"]
-                st.query_params.update(qp)
-        except (ValueError, TypeError):
-            pass
+    # Knob-selected session id is the single source of truth.
+    if "tcp_session_knob" not in st.session_state:
+        st.session_state["tcp_session_knob"] = 1
 
     backend_ok = False
     try:
@@ -2729,77 +2846,92 @@ def trading_control_panel_page():
         unsafe_allow_html=True,
     )
 
-    sessions_for_tcp = []
-    try:
-        sessions_for_tcp = api_client.list_sessions(limit=50) if backend_ok else []
-    except Exception:
-        pass
-    active_sessions = [s for s in sessions_for_tcp if s.get("status") in ("ACTIVE", "PAUSED")]
-    session_options = [(0, "— No session —")] + [(int(s["id"]), f"#{s['id']} {s['symbol']} ({s['status']})") for s in active_sessions]
-    session_id_tcp = st.selectbox(
-        "Session",
-        options=[o[0] for o in session_options],
-        format_func=lambda x: next((o[1] for o in session_options if o[0] == x), str(x)),
-        key="tcp_session_select",
-    )
-    st.caption("Auto Refresh")
-    auto_on = st.session_state.get("tcp_auto_refresh_enabled", False)
-    pill_val = st.radio(
-        "Auto Refresh",
-        options=["OFF", "ON"],
-        index=1 if auto_on else 0,
-        key="tcp_auto_refresh_slider",
-        horizontal=True,
-        label_visibility="collapsed",
-    )
-    st.session_state["tcp_auto_refresh_enabled"] = (pill_val == "ON")
-    if not session_id_tcp:
+    knob_val = int(st.session_state.get("tcp_session_knob", 1))
+    knob_val = max(1, min(10, knob_val))
+    st.session_state["tcp_session_knob"] = knob_val
+    session_id_tcp = knob_val
+    knob_changed = st.session_state.get("tcp_current_session_id") != session_id_tcp
+    if knob_changed:
+        st.session_state["tcp_current_session_id"] = session_id_tcp
         st.session_state.pop("tcp_panel_result", None)
-        st.session_state.pop("tcp_auto_refresh_cfg", None)
-    elif session_id_tcp:
-        selected_session = next((s for s in active_sessions if s.get("id") == session_id_tcp), None)
-        tcp_timeframe = (selected_session or {}).get("timeframe", "1m")
-        tcp_cfg = st.session_state.get("tcp_auto_refresh_cfg")
-        if not isinstance(tcp_cfg, dict) or tcp_cfg.get("session_id") != int(session_id_tcp):
-            st.session_state["tcp_auto_refresh_cfg"] = {
-                "session_id": int(session_id_tcp),
-                "timeframe": tcp_timeframe,
-                "interval_seconds": _refresh_seconds_for_timeframe(tcp_timeframe),
-            }
+        st.session_state.pop("tcp_error", None)
+        st.session_state.pop("tcp_last_fetch_ts", None)
+    auto_on = st.session_state.get("tcp_auto_refresh_enabled", False)
+    tcp_cfg = st.session_state.get("tcp_auto_refresh_cfg")
+    if not isinstance(tcp_cfg, dict) or tcp_cfg.get("session_id") != int(session_id_tcp):
+        st.session_state["tcp_auto_refresh_cfg"] = {
+            "session_id": int(session_id_tcp),
+            "timeframe": "1m",
+            "interval_seconds": _refresh_seconds_for_timeframe("1m"),
+        }
     _tcp_auto_refresh_fragment()
     panel_data = st.session_state.get("tcp_panel_result")
-    need_fetch = session_id_tcp and backend_ok and (
-        not panel_data or panel_data.get("session_id") != session_id_tcp
-    )
+    panel_session_id = None
+    if isinstance(panel_data, dict):
+        panel_session_id = panel_data.get("session_id")
+        if panel_session_id is None and isinstance(panel_data.get("session"), dict):
+            panel_session_id = panel_data.get("session", {}).get("id")
+    try:
+        panel_session_id = int(panel_session_id) if panel_session_id is not None else None
+    except (TypeError, ValueError):
+        panel_session_id = None
+    need_fetch = knob_changed or (not panel_data) or (panel_session_id != int(session_id_tcp))
     if need_fetch:
         try:
+            # Validate the selected session id first, then load TCP payload
+            session_detail = api_client.get_session(int(session_id_tcp))
+            st.session_state["tcp_session_detail"] = session_detail if isinstance(session_detail, dict) else {}
             panel = api_client.get_trading_control_panel(int(session_id_tcp))
             if panel and panel.get("session_id") == session_id_tcp:
                 st.session_state["tcp_panel_result"] = panel
                 st.session_state["tcp_last_fetch_ts"] = time.time()
+                tf = panel.get("session", {}).get("timeframe", "1m")
+                st.session_state["tcp_auto_refresh_cfg"] = {
+                    "session_id": int(session_id_tcp),
+                    "timeframe": tf,
+                    "interval_seconds": _refresh_seconds_for_timeframe(tf),
+                }
                 st.session_state.pop("tcp_error", None)
                 panel_data = panel
             else:
-                st.session_state["tcp_error"] = "Cannot get data"
+                st.session_state["tcp_error"] = f"No such session exists with id {session_id_tcp}"
                 st.session_state.pop("tcp_panel_result", None)
-        except APIError as e:
-            st.session_state["tcp_error"] = f"Cannot get data: {e.detail}"
+        except APIError:
+            st.session_state["tcp_error"] = f"No such session exists with id {session_id_tcp}"
             st.session_state.pop("tcp_panel_result", None)
+            st.session_state.pop("tcp_session_detail", None)
         except Exception:
-            st.session_state["tcp_error"] = "Cannot get data"
+            st.session_state["tcp_error"] = f"No such session exists with id {session_id_tcp}"
             st.session_state.pop("tcp_panel_result", None)
+            st.session_state.pop("tcp_session_detail", None)
 
     if st.session_state.get("tcp_error"):
         st.error(st.session_state["tcp_error"])
 
     panel_data = st.session_state.get("tcp_panel_result")
 
-    sess_status = "—" if not session_id_tcp else str((panel_data or {}).get("session_status") or "—").upper()
+    sess_status = str((panel_data or {}).get("session_status") or "—").upper()
     state_bias = (panel_data or {}).get("state_bias") or "NEUTRAL"
     state_bias = str(state_bias).upper()
     lv = (panel_data or {}).get("latest_volatility_calculation") or {}
     latest_alert = (panel_data or {}).get("latest_alert")
     latest_pb = (panel_data or {}).get("latest_pullback_calculation") or {}
+    trend_strength = (panel_data or {}).get("trend_strenght") or {}
+    session_data_tcp = st.session_state.get("tcp_session_detail", {}) or {}
+    alert_freeze_raw = session_data_tcp.get("alert_freeze")
+    if alert_freeze_raw is None:
+        alert_freeze_raw = (panel_data or {}).get("alert_freeze")
+    if alert_freeze_raw is None:
+        alert_freeze_raw = ((panel_data or {}).get("session") or {}).get("alert_freeze")
+
+    if isinstance(alert_freeze_raw, bool):
+        alert_freeze_on = alert_freeze_raw
+    elif isinstance(alert_freeze_raw, (int, float)):
+        alert_freeze_on = bool(alert_freeze_raw)
+    elif isinstance(alert_freeze_raw, str):
+        alert_freeze_on = alert_freeze_raw.strip().lower() in ("true", "1", "yes", "on")
+    else:
+        alert_freeze_on = False
     vol_status = (lv.get("volatility_status") or "NORMAL").upper()
     vr = lv.get("vol_ratio")
     try:
@@ -2813,6 +2945,18 @@ def trading_control_panel_page():
         direction = str(latest_alert.get("direction", "")).upper()
         alert_color = "#22c55e" if direction == "LONG" else "#ef4444" if direction == "SHORT" else "#f0c048"
     pb_state = latest_pb.get("pullback_state", "NONE") if latest_pb else "NONE"
+    trend_level = str(trend_strength.get("level", "WEAK")).upper()
+    trend_direction = str(trend_strength.get("direction", "NEUTRAL")).upper()
+    if trend_level not in ("WEAK", "VALID", "STRONG"):
+        trend_level = "WEAK"
+    if trend_direction not in ("BULLISH", "BEARISH", "NEUTRAL"):
+        trend_direction = "NEUTRAL"
+    trend_dir_class = f"tcp-trend-direction-{trend_direction.lower()}"
+    trend_bar_active_class = f"tcp-trend-bar-active-{trend_direction.lower()}"
+    trend_level_count = 1 if trend_level == "WEAK" else 2 if trend_level == "VALID" else 3
+    trend_bar_1 = trend_bar_active_class if trend_level_count >= 1 else ""
+    trend_bar_2 = trend_bar_active_class if trend_level_count >= 2 else ""
+    trend_bar_3 = trend_bar_active_class if trend_level_count >= 3 else ""
 
     bias_arrow_class = f"tcp-bias-arrow-{state_bias.lower()}"
     bias_label_class = f"tcp-bias-{state_bias.lower()}"
@@ -2869,11 +3013,17 @@ def trading_control_panel_page():
                 unsafe_allow_html=True,
             )
             st.markdown(
-                """
+                f"""
             <div class="tcp-panel">
                 <div class="tcp-panel-label">TREND</div>
-                <div style="height: 90px; display: flex; align-items: center; justify-content: center;">
-                    <span style="font-size: 0.85rem; color: #888;">—</span>
+                <div class="tcp-trend-wrap">
+                    <div class="tcp-trend-direction {trend_dir_class}">{trend_direction}</div>
+                    <div class="tcp-trend-level-badge">{trend_level}</div>
+                    <div class="tcp-trend-bars">
+                        <span class="tcp-trend-bar {trend_bar_1}"></span>
+                        <span class="tcp-trend-bar {trend_bar_2}"></span>
+                        <span class="tcp-trend-bar {trend_bar_3}"></span>
+                    </div>
                 </div>
             </div>
             """,
@@ -2918,26 +3068,52 @@ def trading_control_panel_page():
                 unsafe_allow_html=True,
             )
 
-    # Knob panel - quick controls
-    if session_id_tcp and 1 <= session_id_tcp <= 10:
-        if st.session_state.get("tcp_session_knob") != session_id_tcp:
-            st.session_state["tcp_session_knob"] = session_id_tcp
-
-    knob_val = st.session_state.get("tcp_session_knob", 1)
-    knob_angle = -135 + (knob_val - 1) * 30
-
     with st.container(border=True):
         st.caption("Quick Controls")
-        kc_col1, kc_col2 = st.columns([1, 2])
-        with kc_col1:
-            components.html(_knob_html(knob_val), height=160, scrolling=False)
-        with kc_col2:
-            st.caption("Drag the knob to rotate • Selects session ID 1–10")
-
-    valid_session_ids = [s["id"] for s in active_sessions]
-    if knob_val in valid_session_ids:
-        st.session_state["tcp_session_select"] = knob_val
-
+        qc1, qc2, qc3, qc4 = st.columns(4)
+        with qc1:
+            with st.container(border=True, height=140):
+                st.markdown('<div class="tcp-quick-subpanel-label">SESSION ID</div>', unsafe_allow_html=True)
+                knob_ui_value = st.slider(
+                    "SESSION ID",
+                    min_value=1,
+                    max_value=10,
+                    value=int(st.session_state.get("tcp_session_knob", 1)),
+                    key="tcp_session_knob_ui",
+                    label_visibility="collapsed",
+                )
+                if int(st.session_state.get("tcp_session_knob", 1)) != int(knob_ui_value):
+                    st.session_state["tcp_session_knob"] = int(knob_ui_value)
+                    st.rerun()
+        with qc2:
+            with st.container(border=True, height=140):
+                st.markdown('<div class="tcp-quick-subpanel-label">AUTO REFRESH</div>', unsafe_allow_html=True)
+                _left, mid, _right = st.columns([1, 1, 1])
+                with mid:
+                    auto_refresh_simple = st.toggle(
+                        "Auto Refresh",
+                        value=bool(auto_on),
+                        key="tcp_auto_refresh_toggle",
+                        label_visibility="collapsed",
+                    )
+                st.session_state["tcp_auto_refresh_enabled"] = bool(auto_refresh_simple)
+        with qc3:
+            with st.container(border=True, height=140):
+                st.markdown('<div class="tcp-quick-subpanel-label">ALERT FREEZE</div>', unsafe_allow_html=True)
+                freeze_class = "tcp-freeze-light-on" if alert_freeze_on else "tcp-freeze-light-off"
+                freeze_text = "ON" if alert_freeze_on else "OFF"
+                freeze_color = "#7fd4ff" if alert_freeze_on else "#9aa0a6"
+                st.markdown(
+                    f'<div style="height:34px;display:flex;align-items:center;justify-content:center;gap:0.5rem;">'
+                    f'<span class="tcp-freeze-light {freeze_class}"></span>'
+                    f'<span style="font-size:0.78rem;font-weight:700;letter-spacing:0.06em;color:{freeze_color};">{freeze_text}</span>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+        with qc4:
+            with st.container(border=True, height=140):
+                st.markdown('<div class="tcp-quick-subpanel-label">SLOT 4</div>', unsafe_allow_html=True)
+                st.markdown('<div style="height:34px;display:flex;align-items:center;justify-content:center;color:#666;">—</div>', unsafe_allow_html=True)
 
 def information_page():
     import html
@@ -2971,7 +3147,14 @@ def information_page():
             st.info("No information returned yet.")
             return
 
-        strategy_sections = ["session", "bias_calculation", "pullback_calculation", "volatility_calculation", "alert"]
+        strategy_sections = [
+            "session",
+            "bias_calculation",
+            "pullback_calculation",
+            "volatility_calculation",
+            "alert",
+            "trading_control_panel",
+        ]
         has_strategy_text_payload = all(
             isinstance(info.get(section), str) for section in strategy_sections if section in info
         ) and any(section in info for section in strategy_sections)
@@ -2994,6 +3177,7 @@ def information_page():
                 "pullback_calculation": "Pullback Calculation",
                 "volatility_calculation": "Volatility Calculation",
                 "alert": "Alert",
+                "trading_control_panel": "Trading Control Panel",
             }
 
             for section_key in strategy_sections:
