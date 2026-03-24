@@ -477,6 +477,18 @@ st.markdown(
         margin-bottom: 0.5rem;
         text-align: center;
     }
+    div:has(#tcp-rules-btn-marker) + div button {
+        background: linear-gradient(180deg, #2a3f4d 0%, #1a2835 100%) !important;
+        color: #7eb8d4 !important;
+        border: 1px solid rgba(58, 144, 184, 0.5) !important;
+        box-shadow: 0 0 6px rgba(58, 144, 184, 0.25) !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.06em !important;
+    }
+    div:has(#tcp-rules-btn-marker) + div button:hover {
+        color: #9ecde8 !important;
+        box-shadow: 0 0 10px rgba(58, 144, 184, 0.35) !important;
+    }
     div[data-testid="stVerticalBlockBorderWrapper"]:has(.tcp-quick-subpanel-label) {
         min-height: 128px;
     }
@@ -2818,6 +2830,30 @@ def _knob_html(initial_value: int) -> str:
     """
 
 
+@st.dialog("Trading Rules", width="large")
+def _show_trading_rules_dialog():
+    import html
+    try:
+        info = api_client.get_trading_info()
+    except Exception:
+        info = {}
+    rules = info.get("trading_rules")
+    if rules is None:
+        rules = "No trading rules available."
+    if isinstance(rules, str):
+        normalized = rules.replace("\r\n", "\n").replace("\r", "\n")
+        escaped = html.escape(normalized)
+        with_breaks = escaped.replace("\n", "<br>")
+        st.markdown(
+            f'<div class="info-rich-text" style="max-height:360px; overflow-y:auto;">{with_breaks}</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.write(rules)
+    if st.button("Close", key="tcp_rules_dialog_close"):
+        st.rerun()
+
+
 def trading_control_panel_page():
     # Knob-selected session id is the single source of truth.
     if "tcp_session_knob" not in st.session_state:
@@ -3114,8 +3150,10 @@ def trading_control_panel_page():
                 )
         with qc4:
             with st.container(border=True, height=140):
-                st.markdown('<div class="tcp-quick-subpanel-label">SLOT 4</div>', unsafe_allow_html=True)
-                st.markdown('<div style="height:34px;display:flex;align-items:center;justify-content:center;color:#666;">—</div>', unsafe_allow_html=True)
+                st.markdown('<div class="tcp-quick-subpanel-label">RULES</div>', unsafe_allow_html=True)
+                st.markdown('<span id="tcp-rules-btn-marker"></span>', unsafe_allow_html=True)
+                if st.button("RULES", key="tcp_rules_btn", use_container_width=True):
+                    _show_trading_rules_dialog()
 
 def information_page():
     import html
