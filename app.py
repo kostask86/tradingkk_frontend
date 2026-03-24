@@ -659,12 +659,6 @@ def _tcp_auto_refresh_fragment() -> None:
     last_fetch_ts = float(st.session_state.get("tcp_last_fetch_ts", 0.0))
 
     elapsed = max(0.0, time.time() - last_fetch_ts)
-    remaining = max(0, int(interval_seconds - elapsed))
-    st.caption(
-        f"Auto-refresh ON | Session #{session_id} | TF: {timeframe} | "
-        f"Every {interval_seconds}s | Next in {remaining}s"
-    )
-
     if elapsed < interval_seconds:
         return
 
@@ -2884,16 +2878,15 @@ def trading_control_panel_page():
         unsafe_allow_html=True,
     )
 
-    knob_val = int(st.session_state.get("tcp_session_knob", 1))
-    knob_val = max(1, min(10, knob_val))
+    knob_val = max(1, min(10, int(st.session_state.get("tcp_session_knob", 1))))
     st.session_state["tcp_session_knob"] = knob_val
     session_id_tcp = knob_val
-    knob_changed = st.session_state.get("tcp_current_session_id") != session_id_tcp
+    knob_changed = int(st.session_state.get("tcp_current_session_id") or 0) != int(session_id_tcp)
     if knob_changed:
         st.session_state["tcp_current_session_id"] = session_id_tcp
-        st.session_state.pop("tcp_panel_result", None)
         st.session_state.pop("tcp_error", None)
         st.session_state.pop("tcp_last_fetch_ts", None)
+        # Do NOT clear tcp_panel_result here - keep showing previous data until new fetch succeeds.
     auto_on = st.session_state.get("tcp_auto_refresh_enabled", False)
     tcp_cfg = st.session_state.get("tcp_auto_refresh_cfg")
     if not isinstance(tcp_cfg, dict) or tcp_cfg.get("session_id") != int(session_id_tcp):
@@ -2902,7 +2895,30 @@ def trading_control_panel_page():
             "timeframe": "1m",
             "interval_seconds": _refresh_seconds_for_timeframe("1m"),
         }
+
+    tcp_cfg = st.session_state.get("tcp_auto_refresh_cfg") or {}
+    tcp_tf = str(tcp_cfg.get("timeframe", "1m"))
+    tcp_interval_seconds = int(tcp_cfg.get("interval_seconds", _refresh_seconds_for_timeframe(tcp_tf)))
+    tcp_last_fetch_ts = float(st.session_state.get("tcp_last_fetch_ts", 0.0))
+    tcp_elapsed = max(0.0, time.time() - tcp_last_fetch_ts)
+    tcp_remaining = max(0, int(tcp_interval_seconds - tcp_elapsed))
+
+    status_col, refresh_col = st.columns([20, 1])
+    with status_col:
+        if auto_on:
+            st.caption(
+                f"Auto-refresh ON | Session #{session_id_tcp} | TF: {tcp_tf} | "
+                f"Every {tcp_interval_seconds}s | Next in {tcp_remaining}s"
+            )
+        else:
+            st.caption(f"Auto-refresh OFF | Session #{session_id_tcp} | TF: {tcp_tf}")
+    with refresh_col:
+        if st.button("↻", key="tcp_refresh_now_btn", help="Refresh all trading panels now"):
+            st.session_state["tcp_force_refresh"] = True
+            st.rerun()
+
     _tcp_auto_refresh_fragment()
+    force_refresh = bool(st.session_state.pop("tcp_force_refresh", False))
     panel_data = st.session_state.get("tcp_panel_result")
     panel_session_id = None
     if isinstance(panel_data, dict):
@@ -2913,14 +2929,19 @@ def trading_control_panel_page():
         panel_session_id = int(panel_session_id) if panel_session_id is not None else None
     except (TypeError, ValueError):
         panel_session_id = None
-    need_fetch = knob_changed or (not panel_data) or (panel_session_id != int(session_id_tcp))
+    need_fetch = force_refresh or knob_changed or (not panel_data) or (panel_session_id != int(session_id_tcp))
     if need_fetch:
         try:
             # Validate the selected session id first, then load TCP payload
             session_detail = api_client.get_session(int(session_id_tcp))
             st.session_state["tcp_session_detail"] = session_detail if isinstance(session_detail, dict) else {}
             panel = api_client.get_trading_control_panel(int(session_id_tcp))
-            if panel and panel.get("session_id") == session_id_tcp:
+            panel_sid = panel.get("session_id") if panel else None
+            try:
+                panel_sid = int(panel_sid) if panel_sid is not None else None
+            except (TypeError, ValueError):
+                panel_sid = None
+            if panel and panel_sid is not None and panel_sid == int(session_id_tcp):
                 st.session_state["tcp_panel_result"] = panel
                 st.session_state["tcp_last_fetch_ts"] = time.time()
                 tf = panel.get("session", {}).get("timeframe", "1m")
