@@ -1561,7 +1561,7 @@ def sessions_page():
 
         with st.container(border=True):
             st.markdown("**List Alerts**")
-            list_cols = st.columns(6)
+            list_cols = st.columns(7)
             with list_cols[0]:
                 al_session_id_filter = st.number_input(
                     "Session ID (0 = all)",
@@ -1579,21 +1579,31 @@ def sessions_page():
             with list_cols[3]:
                 al_type_filter = st.selectbox("Type", ["All"] + ALERT_TYPES, index=0, key="al_list_type")
             with list_cols[4]:
-                al_limit = st.number_input("Limit", min_value=1, max_value=1000, value=100, step=10, key="al_list_limit")
+                al_risky_filter = st.selectbox("Risky", ["All", "Yes", "No"], index=0, key="al_list_risky")
             with list_cols[5]:
+                al_limit = st.number_input("Limit", min_value=1, max_value=1000, value=100, step=10, key="al_list_limit")
+            with list_cols[6]:
                 al_offset = st.number_input("Offset", min_value=0, value=0, step=10, key="al_list_offset")
 
             if st.button("Get Alerts", use_container_width=True, key="al_get_list"):
                 try:
                     session_id_filter = int(al_session_id_filter) if int(al_session_id_filter) > 0 else None
+                    risky_filter_val = (
+                        True if al_risky_filter == "Yes" else False if al_risky_filter == "No" else None
+                    )
                     alerts = api_client.list_alerts(
                         session_id=session_id_filter,
                         outcome_status=al_status_filter if al_status_filter != "All" else None,
                         direction=al_direction_filter if al_direction_filter != "All" else None,
                         type=al_type_filter if al_type_filter != "All" else None,
+                        risky=risky_filter_val,
                         limit=int(al_limit),
                         offset=int(al_offset),
                     )
+
+                    # Keep a UI-side fallback filter for backends that ignore unknown query params.
+                    if risky_filter_val is not None:
+                        alerts = [a for a in alerts if bool(a.get("risky", False)) == risky_filter_val]
                     st.session_state["alerts_list"] = alerts
                     st.success(f"Loaded {len(alerts)} alert(s).")
                 except APIError as e:
@@ -1614,6 +1624,7 @@ def sessions_page():
                     "direction",
                     "type",
                     "outcome_status",
+                    "risky",
                     "entry_signal_price",
                     "stop_price",
                     "target_price",
@@ -1662,7 +1673,7 @@ def sessions_page():
             if "alert_detail" in st.session_state:
                 st.markdown("**Alert Detail**")
                 ad = st.session_state["alert_detail"]
-                detail_cols = st.columns(5)
+                detail_cols = st.columns(6)
                 with detail_cols[0]:
                     st.metric("Direction", ad.get("direction", "—"))
                 with detail_cols[1]:
@@ -1673,6 +1684,8 @@ def sessions_page():
                     st.metric("Entry", ad.get("entry_signal_price", "—"))
                 with detail_cols[4]:
                     st.metric("Stop", ad.get("stop_price", "—"))
+                with detail_cols[5]:
+                    st.metric("Risky", "Yes" if bool(ad.get("risky", False)) else "No")
                 st.json(ad)
 
         with st.container(border=True):
@@ -1792,10 +1805,17 @@ def sessions_page():
                 with md_cols_2[0]:
                     st.metric("strong_close_max_wick_ratio", metadata.get("strong_close_max_wick_ratio", "—"))
                 with md_cols_2[1]:
-                    st.metric("persistence_threshold", metadata.get("persistence_threshold", "—"))
+                    st.metric(
+                        "risky_alert_range_threshold_pct",
+                        metadata.get("risky_alert_range_threshold_pct", "—"),
+                    )
                 with md_cols_2[2]:
-                    st.metric("strength_threshold", metadata.get("strength_threshold", "—"))
+                    st.metric("persistence_threshold", metadata.get("persistence_threshold", "—"))
                 with md_cols_2[3]:
+                    st.metric("strength_threshold", metadata.get("strength_threshold", "—"))
+
+                md_cols_3 = st.columns(4)
+                with md_cols_3[0]:
                     st.metric("cooldown_until", metadata.get("cooldown_until", "—"))
                 st.json(metadata)
 

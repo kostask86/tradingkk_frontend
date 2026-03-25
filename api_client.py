@@ -227,6 +227,7 @@ def list_alerts(
     outcome_status: Optional[str] = None,
     direction: Optional[str] = None,
     type: Optional[str] = None,
+    risky: Optional[bool] = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[dict]:
@@ -239,6 +240,8 @@ def list_alerts(
         params["direction"] = direction
     if type:
         params["type"] = type
+    if risky is not None:
+        params["risky"] = bool(risky)
     resp = requests.get(f"{BASE_URL}/api/alerts/", params=params)
     return _handle_response(resp)
 
