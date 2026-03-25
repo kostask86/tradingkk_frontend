@@ -348,3 +348,18 @@ def health_check() -> dict:
 def get_trading_info() -> dict:
     resp = requests.get(f"{BASE_URL}/tradinginfo")
     return _handle_response(resp)
+
+
+# ── AI Trader News ─────────────────────────────────────────────────
+def get_daily_news(symbol: str, lookback_hours: int = 12) -> dict:
+    """
+    Fetch LLM-generated daily news for a given instrument.
+
+    Backend endpoint: GET /api/ai-trader/news?symbol=...&lookback_hours=...
+    """
+    params = {
+        "symbol": (symbol or "").upper().strip(),
+        "lookback_hours": int(lookback_hours),
+    }
+    resp = requests.get(f"{BASE_URL}/api/ai-trader/news", params=params)
+    return _handle_response(resp)

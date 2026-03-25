@@ -24,7 +24,7 @@ TIMEFRAME_REFRESH_SECONDS = {
     "4h": 14400,
 }
 
-st.set_page_config(page_title="Tradingkk", page_icon="📈", layout="wide")
+st.set_page_config(page_title="TradingKK", page_icon="📈", layout="wide")
 
 # ── Custom CSS ────────────────────────────────────────────────────────
 
@@ -646,19 +646,31 @@ def _system_clock_widget() -> None:
 
 @st.fragment(run_every="1s")
 def _tcp_auto_refresh_fragment() -> None:
-    if not st.session_state.get("tcp_auto_refresh_enabled", False):
-        return
+    auto_enabled = bool(st.session_state.get("tcp_auto_refresh_enabled", False))
 
     cfg = st.session_state.get("tcp_auto_refresh_cfg")
-    if not isinstance(cfg, dict):
+    if isinstance(cfg, dict):
+        session_id = cfg.get("session_id", st.session_state.get("tcp_session_knob", 1))
+        timeframe = cfg.get("timeframe", "1m")
+        interval_seconds = int(cfg.get("interval_seconds", _refresh_seconds_for_timeframe(timeframe)))
+    else:
+        session_id = st.session_state.get("tcp_session_knob", 1)
+        timeframe = "1m"
+        interval_seconds = _refresh_seconds_for_timeframe(timeframe)
+
+    last_fetch_ts = float(st.session_state.get("tcp_last_fetch_ts", 0.0))
+    elapsed = max(0.0, time.time() - last_fetch_ts)
+    remaining = max(0, int(interval_seconds - elapsed))
+
+    if not auto_enabled:
+        st.caption(f"Auto-refresh OFF | Session #{session_id} | TF: {timeframe}")
         return
 
-    session_id = cfg.get("session_id")
-    timeframe = cfg.get("timeframe", "1m")
-    interval_seconds = int(cfg.get("interval_seconds", _refresh_seconds_for_timeframe(timeframe)))
-    last_fetch_ts = float(st.session_state.get("tcp_last_fetch_ts", 0.0))
+    st.caption(
+        f"Auto-refresh ON | Session #{session_id} | TF: {timeframe} | "
+        f"Every {interval_seconds}s | Next in {remaining}s"
+    )
 
-    elapsed = max(0.0, time.time() - last_fetch_ts)
     if elapsed < interval_seconds:
         return
 
@@ -728,7 +740,7 @@ def _visualize_auto_refresh_fragment(show_caption: bool = False) -> None:
 # ── Sidebar ───────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.title("📈 Tradingkk")
+    st.title("📈 TradingKK")
     st.caption("Trading session manager")
     st.divider()
 
@@ -2904,20 +2916,13 @@ def trading_control_panel_page():
     tcp_remaining = max(0, int(tcp_interval_seconds - tcp_elapsed))
 
     status_col, refresh_col = st.columns([20, 1])
-    with status_col:
-        if auto_on:
-            st.caption(
-                f"Auto-refresh ON | Session #{session_id_tcp} | TF: {tcp_tf} | "
-                f"Every {tcp_interval_seconds}s | Next in {tcp_remaining}s"
-            )
-        else:
-            st.caption(f"Auto-refresh OFF | Session #{session_id_tcp} | TF: {tcp_tf}")
     with refresh_col:
         if st.button("↻", key="tcp_refresh_now_btn", help="Refresh all trading panels now"):
             st.session_state["tcp_force_refresh"] = True
             st.rerun()
 
-    _tcp_auto_refresh_fragment()
+    with status_col:
+        _tcp_auto_refresh_fragment()
     force_refresh = bool(st.session_state.pop("tcp_force_refresh", False))
     panel_data = st.session_state.get("tcp_panel_result")
     panel_session_id = None
@@ -2968,6 +2973,50 @@ def trading_control_panel_page():
         st.error(st.session_state["tcp_error"])
 
     panel_data = st.session_state.get("tcp_panel_result")
+
+    last_bias_ts = None
+    if isinstance(panel_data, dict):
+        # Try common locations/keys for the bias calculation object.
+        bias_objs_to_check = []
+        bias_objs_to_check.extend(
+            [
+                panel_data.get("bias_calculation"),
+                panel_data.get("latest_bias_calculation"),
+                panel_data.get("latest_bias"),
+            ]
+        )
+        session_obj = panel_data.get("session") if isinstance(panel_data.get("session"), dict) else {}
+        bias_objs_to_check.extend(
+            [
+                session_obj.get("bias_calculation"),
+                session_obj.get("latest_bias_calculation"),
+                session_obj.get("latest_bias"),
+            ]
+        )
+
+        bias_obj = next((b for b in bias_objs_to_check if isinstance(b, dict)), None)
+        if isinstance(bias_obj, dict):
+            for ts_key in (
+                "calculated_at",
+                "updated_at",
+                "created_at",
+                "timestamp",
+                "last_updated_at",
+            ):
+                if bias_obj.get(ts_key):
+                    last_bias_ts = bias_obj.get(ts_key)
+                    break
+        else:
+            # If the bias field itself is a timestamp-like scalar.
+            scalar_obj = next(
+                (b for b in bias_objs_to_check if b is not None and not isinstance(b, (dict, list))),
+                None,
+            )
+            if scalar_obj is not None:
+                last_bias_ts = scalar_obj
+
+    with status_col:
+        st.caption(f"Last data for session: {_fmt_dt(last_bias_ts)}")
 
     sess_status = str((panel_data or {}).get("session_status") or "—").upper()
     state_bias = (panel_data or {}).get("state_bias") or "NEUTRAL"
@@ -3181,7 +3230,61 @@ def information_page():
     import json
 
     st.header("Information")
-    (info_tab,) = st.tabs(["Trading Info"])
+    info_tab, news_tab = st.tabs(["Trading Info", "News"])
+
+    with news_tab:
+        st.subheader("AI Trader News")
+        st.caption("Fetch AI-generated daily news for an instrument.")
+
+        news_symbol = st.text_input(
+            "Instrument (e.g. BTCUSD, AAPL, EURUSD)",
+            value=str(st.session_state.get("ai_news_symbol", "")),
+            key="ai_news_symbol_ui",
+        )
+        # Keep the source of truth in session_state for repeatable reruns.
+        st.session_state["ai_news_symbol"] = news_symbol
+
+        lookback_hours = st.number_input(
+            "Loopback hours",
+            min_value=1,
+            max_value=72,
+            value=int(st.session_state.get("ai_news_lookback_hours", 12)),
+            step=1,
+            key="ai_news_lookback_hours_ui",
+        )
+        st.session_state["ai_news_lookback_hours"] = int(lookback_hours)
+
+        ask_news = st.button(
+            "Ask the AI Trader about News",
+            use_container_width=True,
+            key="ai_news_ask_btn",
+        )
+
+        if ask_news:
+            if not str(news_symbol).strip():
+                st.warning("Please enter an instrument/symbol.")
+            else:
+                try:
+                    st.session_state["ai_news_result"] = api_client.get_daily_news(
+                        symbol=news_symbol,
+                        lookback_hours=int(lookback_hours),
+                    )
+                    st.session_state.pop("ai_news_error", None)
+                except APIError as e:
+                    st.session_state["ai_news_error"] = f"Failed to load news: {e.detail}"
+                except Exception as e:
+                    st.session_state["ai_news_error"] = f"Connection error: {e}"
+
+        if st.session_state.get("ai_news_error"):
+            st.error(st.session_state["ai_news_error"])
+
+        news_result = st.session_state.get("ai_news_result")
+        if isinstance(news_result, dict):
+            st.markdown("**News Answer**")
+            st.write(news_result.get("text", ""))
+            st.divider()
+            st.markdown("**Raw JSON Response**")
+            st.json(news_result)
 
     with info_tab:
         top_cols = st.columns([2, 1])
