@@ -389,6 +389,54 @@ st.markdown(
     .tcp-session-status-paused { color: #f0ad4e; }
     .tcp-session-status-completed { color: #9aa0a6; }
     .tcp-session-status-none { color: #666; }
+    .tcp-alert-status-body {
+        min-height: 90px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45rem;
+        padding: 0 0.25rem;
+    }
+    .tcp-alert-main-line {
+        font-size: 1.2rem;
+        font-weight: 800;
+        line-height: 1.2;
+        text-align: center;
+    }
+    .tcp-alert-risk-row {
+        min-height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .tcp-alert-risk-row:empty { display: none; min-height: 0; }
+    .tcp-risk-pill {
+        display: inline-block;
+        font-size: 0.62rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        padding: 0.22rem 0.6rem;
+        border-radius: 999px;
+        border: 1px solid rgba(120,130,150,0.45);
+    }
+    .tcp-risk-pill-risky {
+        color: #fff7ed;
+        background: linear-gradient(180deg, #c2410c 0%, #9a3412 100%);
+        border-color: rgba(251, 146, 60, 0.55);
+        box-shadow: 0 0 10px rgba(194, 65, 12, 0.45);
+    }
+    .tcp-risk-pill-safe {
+        color: #bbf7d0;
+        background: rgba(34, 197, 94, 0.14);
+        border-color: rgba(34, 197, 94, 0.5);
+    }
+    .tcp-risk-pill-unknown {
+        color: #9aa0a6;
+        background: rgba(0,0,0,0.25);
+        border-color: rgba(100,110,130,0.4);
+    }
     .tcp-controls-inner {
         padding-top: 0.25rem;
     }
@@ -573,6 +621,21 @@ def _fmt_dt(val) -> str:
         return str(val)
     except Exception:
         return str(val)
+
+
+def _tcp_alert_risky_bool(alert: dict | None) -> bool | None:
+    if not isinstance(alert, dict):
+        return None
+    r = alert.get("risky")
+    if r is None:
+        return None
+    if isinstance(r, bool):
+        return r
+    if isinstance(r, (int, float)):
+        return bool(r)
+    if isinstance(r, str):
+        return r.strip().lower() in ("true", "1", "yes", "on")
+    return None
 
 
 def _bias_colored_html(value: str | None) -> str:
@@ -3072,6 +3135,16 @@ def trading_control_panel_page():
     if latest_alert and latest_alert.get("outcome_status") == "OPEN":
         direction = str(latest_alert.get("direction", "")).upper()
         alert_color = "#22c55e" if direction == "LONG" else "#ef4444" if direction == "SHORT" else "#f0c048"
+
+    alert_risky_html = ""
+    if latest_alert and latest_alert.get("outcome_status") == "OPEN":
+        risky_flag = _tcp_alert_risky_bool(latest_alert)
+        if risky_flag is True:
+            alert_risky_html = '<span class="tcp-risk-pill tcp-risk-pill-risky">RISKY</span>'
+        elif risky_flag is False:
+            alert_risky_html = '<span class="tcp-risk-pill tcp-risk-pill-safe">SAFE</span>'
+        else:
+            alert_risky_html = '<span class="tcp-risk-pill tcp-risk-pill-unknown">N/A</span>'
     pb_state = latest_pb.get("pullback_state", "NONE") if latest_pb else "NONE"
     trend_level = str(trend_strength.get("level", "WEAK")).upper()
     trend_direction = str(trend_strength.get("direction", "NEUTRAL")).upper()
@@ -3133,8 +3206,9 @@ def trading_control_panel_page():
                 f"""
             <div class="tcp-panel">
                 <div class="tcp-panel-label">ALERT STATUS</div>
-                <div style="height: 90px; display: flex; align-items: center; justify-content: center;">
-                    <span style="font-size: 1.2rem; font-weight: 800; color: {alert_color};">{alert_text}</span>
+                <div class="tcp-alert-status-body">
+                    <div class="tcp-alert-main-line" style="color: {alert_color};">{alert_text}</div>
+                    <div class="tcp-alert-risk-row">{alert_risky_html}</div>
                 </div>
             </div>
             """,
