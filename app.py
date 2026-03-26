@@ -3057,6 +3057,29 @@ def trading_control_panel_page():
 
     panel_data = st.session_state.get("tcp_panel_result")
 
+    # Minimal trend chart data for TCP (50 bars + up to 4 latest swing points).
+    tcp_viz_data = st.session_state.get("tcp_viz_result")
+    tcp_viz_session_id = None
+    if isinstance(tcp_viz_data, dict):
+        tcp_viz_session_id = (tcp_viz_data.get("session") or {}).get("id")
+    try:
+        tcp_viz_session_id = int(tcp_viz_session_id) if tcp_viz_session_id is not None else None
+    except (TypeError, ValueError):
+        tcp_viz_session_id = None
+
+    need_viz_fetch = force_refresh or knob_changed or (not isinstance(tcp_viz_data, dict)) or (
+        tcp_viz_session_id != int(session_id_tcp)
+    )
+    if need_viz_fetch:
+        try:
+            viz = api_client.visualize_session(int(session_id_tcp), 50)
+            if isinstance(viz, dict):
+                st.session_state["tcp_viz_result"] = viz
+                st.session_state.pop("tcp_viz_error", None)
+                tcp_viz_data = viz
+        except Exception:
+            st.session_state["tcp_viz_error"] = f"Could not load chart data for session {session_id_tcp}"
+
     last_bias_ts = None
     if isinstance(panel_data, dict):
         # Try common locations/keys for the bias calculation object.
@@ -3100,6 +3123,62 @@ def trading_control_panel_page():
 
     with status_col:
         st.caption(f"Last data for session: {_fmt_dt(last_bias_ts)}")
+
+    with st.container(border=True):
+        tcp_viz = st.session_state.get("tcp_viz_result")
+        bars = tcp_viz.get("bars", []) if isinstance(tcp_viz, dict) else []
+        if bars:
+            import pandas as pd
+            import altair as alt
+
+            bars_df = pd.DataFrame([{"bar_index": idx, **bar} for idx, bar in enumerate(bars)])
+            if "close" in bars_df.columns:
+                bars_df["close"] = pd.to_numeric(bars_df["close"], errors="coerce")
+            bars_df["date"] = pd.to_datetime(bars_df.get("date"), errors="coerce", utc=True)
+            chart_df = bars_df.dropna(subset=["date", "close"]).copy()
+
+            if chart_df.empty:
+                st.caption("No chart bars available.")
+            else:
+                base = alt.Chart(chart_df).encode(
+                    x=alt.X("date:T", title="Time (UTC)", scale=alt.Scale(type="utc")),
+                    y=alt.Y("close:Q", title="Price", scale=alt.Scale(zero=False)),
+                )
+                line = base.mark_line(color="#5aa0ff", strokeWidth=1.8)
+
+                swings = []
+                for key in ["previous_high_swing", "latest_high_swing", "previous_low_swing", "latest_low_swing"]:
+                    sp = tcp_viz.get(key) if isinstance(tcp_viz, dict) else None
+                    if isinstance(sp, dict):
+                        swings.append(sp)
+
+                marker_layer = None
+                if swings:
+                    swings_df = pd.DataFrame(swings)
+                    if {"bar_index", "price", "type"}.issubset(swings_df.columns):
+                        swings_df["bar_index"] = pd.to_numeric(swings_df["bar_index"], errors="coerce").astype("Int64")
+                        swings_df["price"] = pd.to_numeric(swings_df["price"], errors="coerce")
+                        swings_df = swings_df.dropna(subset=["bar_index", "price"])
+                        swings_df = swings_df.sort_values("bar_index").tail(4)
+                        marker_df = swings_df.merge(chart_df[["bar_index", "date"]], on="bar_index", how="left")
+                        marker_df = marker_df.dropna(subset=["date", "price"])
+                        if not marker_df.empty:
+                            marker_layer = alt.Chart(marker_df).mark_point(
+                                filled=True, size=90, strokeWidth=1.2, stroke="black"
+                            ).encode(
+                                x=alt.X("date:T", scale=alt.Scale(type="utc")),
+                                y=alt.Y("price:Q", scale=alt.Scale(zero=False)),
+                                color=alt.Color(
+                                    "type:N",
+                                    scale=alt.Scale(domain=["HIGH", "LOW"], range=["#22c55e", "#ef4444"]),
+                                    legend=None,
+                                ),
+                            )
+
+                chart = line if marker_layer is None else (line + marker_layer)
+                st.altair_chart(chart.properties(height=170), use_container_width=True)
+        else:
+            st.caption("No chart bars available.")
 
     sess_status = str((panel_data or {}).get("session_status") or "—").upper()
     state_bias = (panel_data or {}).get("state_bias") or "NEUTRAL"
