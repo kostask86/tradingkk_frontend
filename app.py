@@ -1,3 +1,5 @@
+import html
+import io
 import streamlit as st
 import streamlit.components.v1 as components
 import api_client
@@ -253,53 +255,85 @@ st.markdown(
     .tcp-bias-neutral { color: #9aa0a6; }
     .tcp-pb-gauge-wrap {
         width: 100%;
-        height: 90px;
-        position: relative;
+        min-height: 96px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
     }
     .tcp-pb-gauge {
-        width: 100%;
-        height: 65px;
+        width: 150px;
+        height: 84px;
         position: relative;
-        background: linear-gradient(90deg, #ef4444 0%, #ef4444 33%, #f0ad4e 33%, #f0ad4e 66%, #3b82f6 66%, #3b82f6 100%);
-        border-radius: 32px 32px 0 0;
+        border-radius: 150px 150px 0 0;
+        background: linear-gradient(
+            90deg,
+            #ef4444 0%,
+            #ef4444 33.33%,
+            #f0ad4e 33.33%,
+            #f0ad4e 66.66%,
+            #3b82f6 66.66%,
+            #3b82f6 100%
+        );
+        border: 1px solid rgba(120, 130, 150, 0.35);
+        box-shadow: inset 0 2px 8px rgba(0,0,0,0.45), 0 2px 10px rgba(0,0,0,0.28);
+        overflow: hidden;
     }
-    .tcp-pb-gauge-inner {
+    .tcp-pb-gauge::before {
+        content: "";
         position: absolute;
-        bottom: 5px;
         left: 50%;
+        bottom: 6px;
         transform: translateX(-50%);
-        width: 72%;
-        height: 52px;
+        width: 116px;
+        height: 62px;
+        border-radius: 116px 116px 0 0;
         background: linear-gradient(180deg, #252830 0%, #1a1d24 100%);
-        border-radius: 26px 26px 0 0;
+        border: 1px solid rgba(90, 100, 120, 0.35);
     }
-    .tcp-pb-gauge-labels {
+    .tcp-pb-gauge::after {
+        content: "";
         position: absolute;
-        bottom: 12px;
-        left: 0;
-        right: 0;
-        display: flex;
-        justify-content: space-between;
-        padding: 0 8%;
-        font-size: 0.58rem;
-        font-weight: 700;
-        letter-spacing: 0.05em;
-        color: rgba(255,255,255,0.9);
-        pointer-events: none;
+        left: 50%;
+        bottom: 0;
+        transform: translateX(-50%);
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #d5d9e0;
+        border: 2px solid #12151b;
+        box-shadow: 0 0 8px rgba(213,217,224,0.45);
+        z-index: 4;
     }
     .tcp-pb-arrow {
         position: absolute;
-        bottom: 2px;
         left: 50%;
-        transform-origin: 50% 90%;
-        font-size: 1.4rem;
-        line-height: 1;
-        color: #f0ad4e;
-        text-shadow: 0 0 8px rgba(240, 173, 78, 0.8);
+        bottom: 5px;
+        width: 2px;
+        height: 56px;
+        background: currentColor;
+        transform-origin: 50% calc(100% - 2px);
+        border-radius: 2px;
+        z-index: 3;
+        box-shadow: 0 0 8px currentColor;
+        font-size: 0;
+        line-height: 0;
     }
-    .tcp-pb-arrow-invalid { transform: translateX(-50%) rotate(-55deg); color: #ef4444; text-shadow: 0 0 8px rgba(239, 68, 68, 0.8); }
-    .tcp-pb-arrow-ready { transform: translateX(-50%) rotate(0deg); color: #f0ad4e; text-shadow: 0 0 8px rgba(240, 173, 78, 0.8); }
-    .tcp-pb-arrow-forming { transform: translateX(-50%) rotate(55deg); color: #3b82f6; text-shadow: 0 0 8px rgba(59, 130, 246, 0.8); }
+    .tcp-pb-arrow::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: -6px;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 5px solid transparent;
+        border-right: 5px solid transparent;
+        border-bottom: 8px solid currentColor;
+        filter: drop-shadow(0 0 3px currentColor);
+    }
+    .tcp-pb-arrow-invalid { transform: translateX(-50%) rotate(-62deg); color: #ef4444; }
+    .tcp-pb-arrow-ready { transform: translateX(-50%) rotate(0deg); color: #f0ad4e; }
+    .tcp-pb-arrow-forming { transform: translateX(-50%) rotate(62deg); color: #3b82f6; }
     .tcp-pb-label {
         text-align: center;
         font-size: 0.85rem;
@@ -1683,6 +1717,15 @@ def sessions_page():
                         st.metric("Stop", latest_alert.get("stop_price", "—"))
                     with alert_cols[4]:
                         st.metric("Target", latest_alert.get("target_price", "—"))
+                    alert_q = st.columns(4)
+                    with alert_q[0]:
+                        st.metric("Bias Strength", int(latest_alert.get("bias_strength", 0) or 0))
+                    with alert_q[1]:
+                        st.metric("Structure Q.", int(latest_alert.get("structure_quality", 0) or 0))
+                    with alert_q[2]:
+                        st.metric("Pullback Q.", int(latest_alert.get("pullback_quality", 0) or 0))
+                    with alert_q[3]:
+                        st.metric("Vol. Fitness", int(latest_alert.get("volatility_fitness", 0) or 0))
                     st.caption(f"Outcome Status: {latest_alert.get('outcome_status', '—')}")
                 else:
                     st.info("No latest alert available.")
@@ -1756,6 +1799,10 @@ def sessions_page():
                     "type",
                     "outcome_status",
                     "risky",
+                    "bias_strength",
+                    "structure_quality",
+                    "pullback_quality",
+                    "volatility_fitness",
                     "entry_signal_price",
                     "stop_price",
                     "target_price",
@@ -1764,7 +1811,52 @@ def sessions_page():
                 display_cols = [c for c in preferred_cols if c in alerts_df.columns] + [
                     c for c in alerts_df.columns if c not in preferred_cols
                 ]
-                st.dataframe(alerts_df[display_cols], use_container_width=True, hide_index=True)
+                display_df = alerts_df[display_cols].copy()
+                display_df.insert(0, "Radar", "📡")
+
+                st.caption(
+                    "Select a row in the table, then click **📡 Open radar chart** below "
+                    "(bias strength, structure quality, pullback quality, volatility fitness)."
+                )
+
+                event = st.dataframe(
+                    display_df,
+                    key="alerts_list_radar_df",
+                    on_select="rerun",
+                    selection_mode="single-row",
+                    hide_index=True,
+                    use_container_width=True,
+                    column_config={
+                        "Radar": st.column_config.TextColumn(
+                            "📡",
+                            width="small",
+                            help="Select the row, then use Open radar chart below.",
+                        ),
+                    },
+                )
+
+                def _alert_table_selection_rows(ev: object) -> list[int]:
+                    if ev is None:
+                        return []
+                    try:
+                        sel = ev.selection
+                    except (AttributeError, KeyError):
+                        return []
+                    if sel is None:
+                        return []
+                    try:
+                        rows = sel.rows
+                    except AttributeError:
+                        rows = sel.get("rows", []) if isinstance(sel, dict) else []
+                    return list(rows) if rows else []
+
+                if st.button("📡 Open radar chart", key="al_open_radar_chart_btn"):
+                    sel_rows = _alert_table_selection_rows(event)
+                    if not sel_rows:
+                        st.warning("Select a row in the table first (click the row to highlight it).")
+                    else:
+                        st.session_state["_alert_radar_payload"] = alerts_df.iloc[int(sel_rows[0])].to_dict()
+                        _show_alert_radar_dialog()
 
         with st.container(border=True):
             st.markdown("**Get One / Delete One**")
@@ -1817,6 +1909,15 @@ def sessions_page():
                     st.metric("Stop", ad.get("stop_price", "—"))
                 with detail_cols[5]:
                     st.metric("Risky", "Yes" if bool(ad.get("risky", False)) else "No")
+                detail_cols_q = st.columns(4)
+                with detail_cols_q[0]:
+                    st.metric("Bias Strength", int(ad.get("bias_strength", 0) or 0))
+                with detail_cols_q[1]:
+                    st.metric("Structure Q.", int(ad.get("structure_quality", 0) or 0))
+                with detail_cols_q[2]:
+                    st.metric("Pullback Q.", int(ad.get("pullback_quality", 0) or 0))
+                with detail_cols_q[3]:
+                    st.metric("Vol. Fitness", int(ad.get("volatility_fitness", 0) or 0))
                 st.json(ad)
 
         with st.container(border=True):
@@ -2069,6 +2170,16 @@ def sessions_page():
                     st.metric("Sec Type", sess.get("sec_type", "STK"))
                 with detail_cols[4]:
                     st.metric("Consec. Count", sess["consecutive_count"])
+
+                quality_cols = st.columns(4)
+                with quality_cols[0]:
+                    st.metric("Bias Strength", int(sess.get("bias_strength", 0) or 0))
+                with quality_cols[1]:
+                    st.metric("Structure Q.", int(sess.get("structure_quality", 0) or 0))
+                with quality_cols[2]:
+                    st.metric("Pullback Q.", int(sess.get("pullback_quality", 0) or 0))
+                with quality_cols[3]:
+                    st.metric("Vol. Fitness", int(sess.get("volatility_fitness", 0) or 0))
 
                 param_cols = st.columns(5)
                 with param_cols[0]:
@@ -3052,6 +3163,130 @@ def _show_trading_rules_dialog():
             st.rerun()
 
 
+def _build_alert_radar_figure(
+    bias_strength: object,
+    structure_quality: object,
+    pullback_quality: object,
+    volatility_fitness: object,
+):
+    """Polar radar (0–100): top=Structure, right=Bias, bottom=Volatility, left=Pullback."""
+    import matplotlib
+
+    try:
+        matplotlib.use("Agg")
+    except Exception:
+        pass
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    def _f(v: object) -> float:
+        try:
+            return max(0.0, min(100.0, float(v if v is not None else 0.0)))
+        except (TypeError, ValueError):
+            return 0.0
+
+    # Order matches reference: clockwise from top — Structure, Bias, Volatility, Pullback
+    s = _f(structure_quality)
+    b = _f(bias_strength)
+    v = _f(volatility_fitness)
+    p = _f(pullback_quality)
+
+    theta = np.array([0.0, np.pi / 2, np.pi, 3 * np.pi / 2, 0.0])
+    r = np.array([s, b, v, p, s])
+
+    fig, ax = plt.subplots(figsize=(6.0, 6.0), subplot_kw=dict(projection="polar"))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    ax.set_theta_zero_location("N")
+    ax.set_theta_direction(-1)
+
+    ax.set_ylim(0, 100)
+    ax.set_yticks([20, 40, 60, 80, 100])
+    ax.set_rlabel_position(22)
+    ax.tick_params(axis="y", labelsize=9, colors="#333333")
+    ax.grid(True, color="#9a9a9a", linestyle="-", linewidth=0.85, alpha=0.95)
+
+    ax.set_xticks([0, np.pi / 2, np.pi, 3 * np.pi / 2])
+    ax.set_xticklabels(
+        [
+            "Structure Quality",
+            "Bias Strength",
+            "Volatility Fitness",
+            "Pullback Quality",
+        ],
+        fontsize=9,
+        color="#111111",
+    )
+
+    ax.fill(theta, r, color="#a8d0ff", alpha=0.42, zorder=3)
+    ax.plot(theta, r, color="#1a56c9", linewidth=2.2, zorder=4)
+
+    spine = ax.spines.get("polar")
+    if spine is not None:
+        spine.set_edgecolor("#000000")
+        spine.set_linewidth(1.6)
+
+    ax.set_title(
+        "Trading Session Radar Snapshot",
+        fontsize=13,
+        fontweight="bold",
+        color="#111111",
+        pad=18,
+    )
+
+    fig.tight_layout()
+    return fig
+
+
+def _alert_radar_figure_to_png(fig: object) -> bytes:
+    """Encode figure to PNG bytes. Avoids st.pyplot + plt.close races in dialogs."""
+    import matplotlib.pyplot as plt
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=120, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+@st.dialog("Alert quality radar", width="large")
+def _show_alert_radar_dialog() -> None:
+    payload = st.session_state.get("_alert_radar_payload")
+    if not isinstance(payload, dict):
+        st.warning("No alert data.")
+        return
+    aid = payload.get("id", "—")
+    st.caption(f"Alert **#{html.escape(str(aid))}** — scores 0–100 on each axis.")
+    try:
+        fig = _build_alert_radar_figure(
+            payload.get("bias_strength"),
+            payload.get("structure_quality"),
+            payload.get("pullback_quality"),
+            payload.get("volatility_fitness"),
+        )
+        png = _alert_radar_figure_to_png(fig)
+        st.image(png, use_container_width=True)
+    except Exception as e:
+        st.error(f"Could not render radar chart: {e}")
+
+    def _radar_metric_int(v: object) -> int:
+        try:
+            return int(round(float(v if v is not None else 0)))
+        except (TypeError, ValueError):
+            return 0
+
+    q1, q2, q3, q4 = st.columns(4)
+    with q1:
+        st.metric("Structure quality", _radar_metric_int(payload.get("structure_quality")))
+    with q2:
+        st.metric("Bias strength", _radar_metric_int(payload.get("bias_strength")))
+    with q3:
+        st.metric("Volatility fitness", _radar_metric_int(payload.get("volatility_fitness")))
+    with q4:
+        st.metric("Pullback quality", _radar_metric_int(payload.get("pullback_quality")))
+
+
 @st.dialog("AI Guardian Angel", width="large")
 def _show_guardian_angel_dialog():
     st.markdown("### AI Guardian Angel")
@@ -3559,20 +3794,38 @@ def trading_control_panel_page():
             pb_state_upper = str(pb_state).upper()
             if pb_state_upper == "NONE":
                 st.markdown(
-                '<div class="tcp-panel"><div class="tcp-panel-label">PULLBACK STATUS</div>'
-                '<div class="tcp-pb-gauge-wrap" style="display:flex;align-items:center;justify-content:center;min-height:90px;">'
+                    '<div class="tcp-panel"><div class="tcp-panel-label">PULLBACK STATUS</div>'
+                    '<div class="tcp-pb-gauge-wrap" style="align-items:center;">'
                     '<span class="tcp-pb-label tcp-pb-label-none">NONE</span></div></div>',
                     unsafe_allow_html=True,
                 )
             else:
-                pb_arrow_class = "tcp-pb-arrow-invalid" if pb_state_upper == "INVALID" else "tcp-pb-arrow-ready" if pb_state_upper == "READY" else "tcp-pb-arrow-forming"
-                pb_label_class = "tcp-pb-label-invalid" if pb_state_upper == "INVALID" else "tcp-pb-label-ready" if pb_state_upper == "READY" else "tcp-pb-label-forming"
+                pb_arrow_class = (
+                    "tcp-pb-arrow-invalid"
+                    if pb_state_upper == "INVALID"
+                    else "tcp-pb-arrow-ready"
+                    if pb_state_upper == "READY"
+                    else "tcp-pb-arrow-forming"
+                )
+                pb_label_class = (
+                    "tcp-pb-label-invalid"
+                    if pb_state_upper == "INVALID"
+                    else "tcp-pb-label-ready"
+                    if pb_state_upper == "READY"
+                    else "tcp-pb-label-forming"
+                )
                 st.markdown(
-                f'<div class="tcp-panel"><div class="tcp-panel-label">PULLBACK STATUS</div>'
-                f'<div class="tcp-pb-gauge-wrap"><div class="tcp-pb-gauge"><div class="tcp-pb-gauge-inner"></div>'
-                f'<div class="tcp-pb-gauge-labels"><span>INVALID</span><span>READY</span><span>FORMING</span></div>'
-                f'<div class="tcp-pb-arrow {pb_arrow_class}">&#9650;</div></div>'
-                    f'<div class="tcp-pb-label {pb_label_class}">{pb_state_upper}</div></div></div>',
+                    f"""
+            <div class="tcp-panel">
+                <div class="tcp-panel-label">PULLBACK STATUS</div>
+                <div class="tcp-pb-gauge-wrap">
+                    <div class="tcp-pb-gauge">
+                        <div class="tcp-pb-arrow {pb_arrow_class}"></div>
+                    </div>
+                </div>
+                <div class="tcp-pb-label {pb_label_class}">{pb_state_upper}</div>
+            </div>
+            """,
                     unsafe_allow_html=True,
                 )
             sess_led = "tcp-session-led-active" if sess_status == "ACTIVE" else "tcp-session-led-paused" if sess_status == "PAUSED" else "tcp-session-led-completed" if sess_status == "COMPLETED" else "tcp-session-led-none"
