@@ -537,6 +537,23 @@ st.markdown(
         color: #9ecde8 !important;
         box-shadow: 0 0 10px rgba(58, 144, 184, 0.35) !important;
     }
+    div:has(#tcp-guardian-btn-marker) + div button {
+        background: linear-gradient(180deg, #6f1d62 0%, #4d1246 100%) !important;
+        color: #ffd5f5 !important;
+        border: 1px solid rgba(255, 120, 220, 0.55) !important;
+        box-shadow: 0 0 8px rgba(255, 77, 208, 0.28), 0 0 16px rgba(255, 77, 208, 0.14) !important;
+        font-weight: 800 !important;
+        letter-spacing: 0.06em !important;
+        text-transform: uppercase !important;
+        min-height: 34px !important;
+        padding: 0.35rem 0.9rem !important;
+        font-size: 0.76rem !important;
+        border-radius: 8px !important;
+    }
+    div:has(#tcp-guardian-btn-marker) + div button:hover {
+        color: #ffe8fb !important;
+        box-shadow: 0 0 12px rgba(255, 77, 208, 0.38), 0 0 20px rgba(255, 77, 208, 0.2) !important;
+    }
     div[data-testid="stVerticalBlockBorderWrapper"]:has(.tcp-quick-subpanel-label) {
         min-height: 128px;
     }
@@ -3397,6 +3414,15 @@ def trading_control_panel_page():
                 st.markdown('<span id="tcp-rules-btn-marker"></span>', unsafe_allow_html=True)
                 if st.button("RULES", key="tcp_rules_btn", use_container_width=True):
                     _show_trading_rules_dialog()
+
+    guardian_left, guardian_mid, guardian_right = st.columns([4, 2, 4])
+    with guardian_mid:
+        st.markdown('<span id="tcp-guardian-btn-marker"></span>', unsafe_allow_html=True)
+        st.button(
+            "AI Guardian Angel",
+            key="tcp_ai_guardian_angel_btn",
+            use_container_width=False,
+        )
 
 def information_page():
     import html
