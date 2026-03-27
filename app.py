@@ -3407,7 +3407,7 @@ def information_page():
 
     with news_tab:
         st.subheader("AI Trader News")
-        st.caption("Fetch AI-generated daily news for an instrument.")
+        st.caption("Fetch Finnhub news, then summarize via AI Trader.")
 
         news_symbol = st.text_input(
             "Instrument (e.g. BTCUSD, AAPL, EURUSD)",
@@ -3416,6 +3416,13 @@ def information_page():
         )
         # Keep the source of truth in session_state for repeatable reruns.
         st.session_state["ai_news_symbol"] = news_symbol
+
+        news_category = st.text_input(
+            "CATEGORY (general, forex, crypto, merger)",
+            value=str(st.session_state.get("ai_news_category", "")),
+            key="ai_news_category_ui",
+        )
+        st.session_state["ai_news_category"] = news_category
 
         lookback_hours = st.number_input(
             "Loopback hours",
@@ -3438,10 +3445,19 @@ def information_page():
                 st.warning("Please enter an instrument/symbol.")
             else:
                 try:
-                    st.session_state["ai_news_result"] = api_client.get_daily_news(
+                    news_resp = api_client.get_daily_news(
                         symbol=news_symbol,
+                        category=news_category if str(news_category).strip() else None,
                         lookback_hours=int(lookback_hours),
                     )
+                    items = news_resp.get("items", []) if isinstance(news_resp, dict) else []
+                    summary_resp = api_client.summarize_news(
+                        symbol=news_symbol,
+                        lookback_hours=int(lookback_hours),
+                        news_items=items if isinstance(items, list) else [],
+                    )
+                    st.session_state["ai_news_feed_result"] = news_resp
+                    st.session_state["ai_news_result"] = summary_resp
                     st.session_state.pop("ai_news_error", None)
                 except APIError as e:
                     st.session_state["ai_news_error"] = f"Failed to load news: {e.detail}"
@@ -3458,6 +3474,10 @@ def information_page():
             st.divider()
             st.markdown("**Raw JSON Response**")
             st.json(news_result)
+            news_feed_result = st.session_state.get("ai_news_feed_result")
+            if isinstance(news_feed_result, dict):
+                with st.expander("Raw News Feed JSON"):
+                    st.json(news_feed_result)
 
     with info_tab:
         top_cols = st.columns([2, 1])

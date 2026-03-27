@@ -354,15 +354,39 @@ def get_trading_info() -> dict:
 
 
 # ── AI Trader News ─────────────────────────────────────────────────
-def get_daily_news(symbol: str, lookback_hours: int = 12) -> dict:
+def get_daily_news(
+    symbol: Optional[str] = None,
+    lookback_hours: int = 12,
+    category: Optional[str] = None,
+) -> dict:
     """
-    Fetch LLM-generated daily news for a given instrument.
+    Fetch Finnhub news.
 
-    Backend endpoint: GET /api/ai-trader/news?symbol=...&lookback_hours=...
+    Backend endpoint: GET /api/ai-trader/news
     """
-    params = {
-        "symbol": (symbol or "").upper().strip(),
-        "lookback_hours": int(lookback_hours),
-    }
+    params: dict = {"lookback_hours": int(lookback_hours)}
+    if symbol is not None and str(symbol).strip():
+        params["symbol"] = str(symbol).upper().strip()
+    if category is not None and str(category).strip():
+        params["category"] = str(category).strip().lower()
     resp = requests.get(f"{BASE_URL}/api/ai-trader/news", params=params)
+    return _handle_response(resp)
+
+
+def summarize_news(
+    symbol: str,
+    lookback_hours: int = 12,
+    news_items: Optional[list[dict]] = None,
+) -> dict:
+    """
+    Summarize fetched news using AI Trader summarize endpoint.
+
+    Backend endpoint: POST /api/ai-trader/news/summarize
+    """
+    payload = {
+        "symbol": str(symbol).upper().strip(),
+        "lookback_hours": int(lookback_hours),
+        "news_items": news_items or [],
+    }
+    resp = requests.post(f"{BASE_URL}/api/ai-trader/news/summarize", json=payload)
     return _handle_response(resp)
