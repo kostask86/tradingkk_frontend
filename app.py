@@ -72,6 +72,45 @@ st.markdown(
         color: #e8eaed;
         font-variant-numeric: tabular-nums;
     }
+    /* Make Streamlit dialog close button clearly visible */
+    div[data-testid="stDialog"] button[aria-label="Close"] {
+        position: absolute !important;
+        top: 10px !important;
+        right: 10px !important;
+        z-index: 20 !important;
+        width: 30px !important;
+        height: 30px !important;
+        min-height: 30px !important;
+        border-radius: 8px !important;
+        border: 1px solid rgba(160, 170, 190, 0.55) !important;
+        background: rgba(25, 30, 40, 0.88) !important;
+        box-shadow: 0 0 8px rgba(0, 0, 0, 0.35) !important;
+        color: #e8eaed !important;
+        opacity: 1 !important;
+    }
+    div[data-testid="stDialog"] > div {
+        position: relative !important;
+    }
+    div[data-testid="stDialog"] button[aria-label="Close"] svg {
+        display: none !important;
+    }
+    div[data-testid="stDialog"] button[aria-label="Close"]::after {
+        content: "×";
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #e8eaed;
+        font-size: 18px;
+        font-weight: 800;
+        line-height: 1;
+    }
+    div[data-testid="stDialog"] button[aria-label="Close"]:hover {
+        border-color: rgba(220, 230, 245, 0.7) !important;
+        background: rgba(35, 42, 56, 0.95) !important;
+        box-shadow: 0 0 10px rgba(120, 145, 200, 0.28) !important;
+    }
     .info-rich-text {
         font-size: 1.03rem;
         line-height: 1.65;
