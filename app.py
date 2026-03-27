@@ -2960,6 +2960,138 @@ def _show_trading_rules_dialog():
         st.rerun()
 
 
+@st.dialog("AI Guardian Angel", width="large")
+def _show_guardian_angel_dialog():
+    st.markdown("### AI Guardian Angel")
+    g1, g2, g3 = st.columns(3)
+    with g1:
+        ga_symbol = st.text_input(
+            "symbol",
+            value=str(st.session_state.get("ga_symbol", "BTCUSD")),
+            key="ga_symbol_ui",
+        )
+    with g2:
+        ga_timeframe = st.text_input(
+            "timeframe",
+            value=str(st.session_state.get("ga_timeframe", "15m")),
+            key="ga_timeframe_ui",
+        )
+    with g3:
+        ga_provider = st.text_input(
+            "provider",
+            value=str(st.session_state.get("ga_provider", "BYBIT")),
+            key="ga_provider_ui",
+        )
+
+    g4, g5 = st.columns(2)
+    with g4:
+        ga_sec_type = st.text_input(
+            "sec_type",
+            value=str(st.session_state.get("ga_sec_type", "SPOT")),
+            key="ga_sec_type_ui",
+        )
+    with g5:
+        ga_num_bars = st.number_input(
+            "num_bars",
+            min_value=1,
+            max_value=200,
+            value=int(st.session_state.get("ga_num_bars", 50)),
+            step=1,
+            key="ga_num_bars_ui",
+        )
+
+    ga_news_raw = st.text_area(
+        "News",
+        value=str(st.session_state.get("ga_news_raw", "")),
+        key="ga_news_raw_ui",
+        height=120,
+        placeholder="One news snippet per line (or paragraph).",
+    )
+
+    st.session_state["ga_symbol"] = ga_symbol
+    st.session_state["ga_timeframe"] = ga_timeframe
+    st.session_state["ga_provider"] = ga_provider
+    st.session_state["ga_sec_type"] = ga_sec_type
+    st.session_state["ga_num_bars"] = int(ga_num_bars)
+    st.session_state["ga_news_raw"] = ga_news_raw
+
+    if st.button("Guard Me", key="ga_guard_me_btn", use_container_width=True):
+        if not str(ga_symbol).strip():
+            st.warning("Please enter symbol.")
+        elif not str(ga_timeframe).strip():
+            st.warning("Please enter timeframe.")
+        else:
+            try:
+                test_bars_resp = api_client.get_test_bars(
+                    symbol=str(ga_symbol),
+                    provider=str(ga_provider),
+                    timeframe=str(ga_timeframe),
+                    sec_type=str(ga_sec_type),
+                    num_bars=int(ga_num_bars),
+                )
+
+                bars_raw = []
+                if isinstance(test_bars_resp, dict):
+                    if isinstance(test_bars_resp.get("bars"), list):
+                        bars_raw = test_bars_resp.get("bars", [])
+                    else:
+                        bars_raw = [test_bars_resp]
+                elif isinstance(test_bars_resp, list):
+                    bars_raw = test_bars_resp
+
+                bars_payload = []
+                for b in bars_raw:
+                    if not isinstance(b, dict):
+                        continue
+                    bars_payload.append(
+                        {
+                            "date": b.get("date"),
+                            "open": b.get("open"),
+                            "high": b.get("high"),
+                            "low": b.get("low"),
+                            "close": b.get("close"),
+                        }
+                    )
+
+                signal_bar_time = None
+                if bars_payload and isinstance(bars_payload[-1], dict):
+                    signal_bar_time = bars_payload[-1].get("date")
+
+                news_snippets = [
+                    line.strip()
+                    for line in str(ga_news_raw).splitlines()
+                    if line and line.strip()
+                ]
+
+                assessment_resp = api_client.create_trend_assessment(
+                    symbol=str(ga_symbol),
+                    timeframe=str(ga_timeframe),
+                    session_id=int(st.session_state.get("ga_session_id", 0) or 0) or None,
+                    signal_bar_time=signal_bar_time,
+                    news_snippets=news_snippets if news_snippets else None,
+                    bars=bars_payload,
+                )
+                st.session_state["ga_test_bars_result"] = test_bars_resp
+                st.session_state["ga_trend_assessment_result"] = assessment_resp
+                st.session_state.pop("ga_error", None)
+            except APIError as e:
+                st.session_state["ga_error"] = f"Guardian Angel call failed: {e.detail}"
+            except Exception as e:
+                st.session_state["ga_error"] = f"Connection error: {e}"
+
+    if st.session_state.get("ga_error"):
+        st.error(st.session_state["ga_error"])
+
+    ga_result = st.session_state.get("ga_trend_assessment_result")
+    if isinstance(ga_result, dict):
+        st.markdown("**LLM Trend Assessment**")
+        llm_part = ga_result.get("llm_trend_assessment")
+        if isinstance(llm_part, dict):
+            st.json(llm_part)
+        else:
+            st.json(ga_result)
+
+
 def trading_control_panel_page():
     # Knob-selected session id is the single source of truth.
     if "tcp_session_knob" not in st.session_state:
@@ -3418,11 +3550,13 @@ def trading_control_panel_page():
     guardian_left, guardian_mid, guardian_right = st.columns([4, 2, 4])
     with guardian_mid:
         st.markdown('<span id="tcp-guardian-btn-marker"></span>', unsafe_allow_html=True)
-        st.button(
+        if st.button(
             "AI Guardian Angel",
             key="tcp_ai_guardian_angel_btn",
             use_container_width=False,
-        )
+        ):
+            st.session_state["ga_session_id"] = int(session_id_tcp)
+            _show_guardian_angel_dialog()
 
 def information_page():
     import html

@@ -390,3 +390,31 @@ def summarize_news(
     }
     resp = requests.post(f"{BASE_URL}/api/ai-trader/news/summarize", json=payload)
     return _handle_response(resp)
+
+
+def create_trend_assessment(
+    symbol: str,
+    timeframe: str,
+    bars: list[dict],
+    session_id: Optional[int] = None,
+    signal_bar_time: Optional[str] = None,
+    news_snippets: Optional[list[str]] = None,
+) -> dict:
+    """
+    Create AI trend assessment from bars/news context.
+
+    Backend endpoint: POST /api/ai-trader/trend-assessments
+    """
+    payload: dict = {
+        "symbol": str(symbol).upper().strip(),
+        "timeframe": str(timeframe).strip(),
+        "bars": bars,
+    }
+    if session_id is not None:
+        payload["session_id"] = int(session_id)
+    if signal_bar_time:
+        payload["signal_bar_time"] = str(signal_bar_time)
+    if news_snippets:
+        payload["news_snippets"] = news_snippets
+    resp = requests.post(f"{BASE_URL}/api/ai-trader/trend-assessments", json=payload)
+    return _handle_response(resp, 201)
