@@ -72,45 +72,6 @@ st.markdown(
         color: #e8eaed;
         font-variant-numeric: tabular-nums;
     }
-    /* Make Streamlit dialog close button clearly visible */
-    div[data-testid="stDialog"] button[aria-label="Close"] {
-        position: absolute !important;
-        top: 10px !important;
-        right: 10px !important;
-        z-index: 20 !important;
-        width: 30px !important;
-        height: 30px !important;
-        min-height: 30px !important;
-        border-radius: 8px !important;
-        border: 1px solid rgba(160, 170, 190, 0.55) !important;
-        background: rgba(25, 30, 40, 0.88) !important;
-        box-shadow: 0 0 8px rgba(0, 0, 0, 0.35) !important;
-        color: #e8eaed !important;
-        opacity: 1 !important;
-    }
-    div[data-testid="stDialog"] > div {
-        position: relative !important;
-    }
-    div[data-testid="stDialog"] button[aria-label="Close"] svg {
-        display: none !important;
-    }
-    div[data-testid="stDialog"] button[aria-label="Close"]::after {
-        content: "×";
-        position: absolute;
-        inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #e8eaed;
-        font-size: 18px;
-        font-weight: 800;
-        line-height: 1;
-    }
-    div[data-testid="stDialog"] button[aria-label="Close"]:hover {
-        border-color: rgba(220, 230, 245, 0.7) !important;
-        background: rgba(35, 42, 56, 0.95) !important;
-        box-shadow: 0 0 10px rgba(120, 145, 200, 0.28) !important;
-    }
     .info-rich-text {
         font-size: 1.03rem;
         line-height: 1.65;
@@ -198,39 +159,88 @@ st.markdown(
     }
     .tcp-bias-gauge-wrap {
         width: 100%;
-        height: 90px;
-        position: relative;
+        min-height: 96px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
     }
     .tcp-bias-gauge {
-        width: 100%;
-        height: 65px;
+        width: 150px;
+        height: 84px;
         position: relative;
-        background: linear-gradient(90deg, #ef4444 0%, #9aa0a6 50%, #22c55e 100%);
-        border-radius: 32px 32px 0 0;
+        border-radius: 150px 150px 0 0;
+        background: linear-gradient(
+            90deg,
+            #ef4444 0%,
+            #ef4444 33.33%,
+            #9aa0a6 33.33%,
+            #9aa0a6 66.66%,
+            #22c55e 66.66%,
+            #22c55e 100%
+        );
+        border: 1px solid rgba(120, 130, 150, 0.35);
+        box-shadow: inset 0 2px 8px rgba(0,0,0,0.45), 0 2px 10px rgba(0,0,0,0.28);
+        overflow: hidden;
+    }
+    .tcp-bias-gauge::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: 6px;
+        transform: translateX(-50%);
+        width: 116px;
+        height: 62px;
+        border-radius: 116px 116px 0 0;
+        background: linear-gradient(180deg, #252830 0%, #1a1d24 100%);
+        border: 1px solid rgba(90, 100, 120, 0.35);
+    }
+    .tcp-bias-gauge::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        transform: translateX(-50%);
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #d5d9e0;
+        border: 2px solid #12151b;
+        box-shadow: 0 0 8px rgba(213,217,224,0.45);
+        z-index: 4;
     }
     .tcp-bias-gauge-inner {
-        position: absolute;
-        bottom: 5px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 72%;
-        height: 52px;
-        background: linear-gradient(180deg, #252830 0%, #1a1d24 100%);
-        border-radius: 26px 26px 0 0;
+        display: none;
     }
     .tcp-bias-arrow {
         position: absolute;
-        bottom: 2px;
         left: 50%;
-        transform-origin: 50% 90%;
-        font-size: 1.4rem;
-        line-height: 1;
-        color: #22c55e;
-        text-shadow: 0 0 8px rgba(34, 197, 94, 0.8);
+        bottom: 5px;
+        width: 2px;
+        height: 56px;
+        background: currentColor;
+        transform-origin: 50% calc(100% - 2px);
+        border-radius: 2px;
+        z-index: 3;
+        box-shadow: 0 0 8px currentColor;
+        font-size: 0; /* hide old text glyph if present */
+        line-height: 0;
     }
-    .tcp-bias-arrow-bearish { transform: translateX(-50%) rotate(-55deg); color: #ef4444; text-shadow: 0 0 8px rgba(239, 68, 68, 0.8); }
-    .tcp-bias-arrow-neutral { transform: translateX(-50%) rotate(0deg); color: #9aa0a6; text-shadow: 0 0 8px rgba(154, 160, 166, 0.6); }
-    .tcp-bias-arrow-bullish { transform: translateX(-50%) rotate(55deg); color: #22c55e; text-shadow: 0 0 8px rgba(34, 197, 94, 0.8); }
+    .tcp-bias-arrow::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: -6px;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 5px solid transparent;
+        border-right: 5px solid transparent;
+        border-bottom: 8px solid currentColor;
+        filter: drop-shadow(0 0 3px currentColor);
+    }
+    .tcp-bias-arrow-bearish { transform: translateX(-50%) rotate(-62deg); color: #ef4444; }
+    .tcp-bias-arrow-neutral { transform: translateX(-50%) rotate(0deg); color: #9aa0a6; }
+    .tcp-bias-arrow-bullish { transform: translateX(-50%) rotate(62deg); color: #22c55e; }
     .tcp-bias-label {
         text-align: center;
         font-size: 0.9rem;
@@ -588,6 +598,8 @@ st.markdown(
         padding: 0.35rem 0.9rem !important;
         font-size: 0.76rem !important;
         border-radius: 8px !important;
+        min-width: 220px !important;
+        white-space: nowrap !important;
     }
     div:has(#tcp-guardian-btn-marker) + div button:hover {
         color: #ffe8fb !important;
@@ -2978,6 +2990,39 @@ def _knob_html(initial_value: int) -> str:
 @st.dialog("Trading Rules", width="large")
 def _show_trading_rules_dialog():
     import html
+    st.markdown('<span id="tcp-rules-dialog-style-scope"></span>', unsafe_allow_html=True)
+    st.markdown(
+        """
+        <style>
+        /* Rules dialog only: top-right X same style as RULES button */
+        div[data-testid="stDialog"]:has(#tcp-rules-dialog-style-scope) button[aria-label="Close"] {
+            border: 1px solid rgba(58, 144, 184, 0.5) !important;
+            background: linear-gradient(180deg, #2a3f4d 0%, #1a2835 100%) !important;
+            color: #7eb8d4 !important;
+            box-shadow: 0 0 6px rgba(58, 144, 184, 0.25) !important;
+        }
+        div[data-testid="stDialog"]:has(#tcp-rules-dialog-style-scope) button[aria-label="Close"]:hover {
+            color: #9ecde8 !important;
+            box-shadow: 0 0 10px rgba(58, 144, 184, 0.35) !important;
+        }
+
+        /* Rules dialog only: bottom Close same style as RULES button */
+        div:has(#tcp-rules-dialog-close-marker) + div button {
+            background: linear-gradient(180deg, #2a3f4d 0%, #1a2835 100%) !important;
+            color: #7eb8d4 !important;
+            border: 1px solid rgba(58, 144, 184, 0.5) !important;
+            box-shadow: 0 0 6px rgba(58, 144, 184, 0.25) !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.06em !important;
+        }
+        div:has(#tcp-rules-dialog-close-marker) + div button:hover {
+            color: #9ecde8 !important;
+            box-shadow: 0 0 10px rgba(58, 144, 184, 0.35) !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     try:
         info = api_client.get_trading_info()
     except Exception:
@@ -2990,13 +3035,21 @@ def _show_trading_rules_dialog():
         escaped = html.escape(normalized)
         with_breaks = escaped.replace("\n", "<br>")
         st.markdown(
-            f'<div class="info-rich-text" style="max-height:360px; overflow-y:auto;">{with_breaks}</div>',
+            (
+                '<div class="info-rich-text" '
+                'style="max-height:360px; overflow-y:auto; color:#9ecde8; '
+                'background:#10202b; border:1px solid rgba(58, 144, 184, 0.5);">'
+                f"{with_breaks}</div>"
+            ),
             unsafe_allow_html=True,
         )
     else:
         st.write(rules)
-    if st.button("Close", key="tcp_rules_dialog_close"):
-        st.rerun()
+    _close_left, _close_mid, _close_right = st.columns([4, 1, 4])
+    with _close_mid:
+        st.markdown('<span id="tcp-rules-dialog-close-marker"></span>', unsafe_allow_html=True)
+        if st.button("Close", key="tcp_rules_dialog_close", use_container_width=False):
+            st.rerun()
 
 
 @st.dialog("AI Guardian Angel", width="large")
@@ -3054,7 +3107,10 @@ def _show_guardian_angel_dialog():
     st.session_state["ga_num_bars"] = int(ga_num_bars)
     st.session_state["ga_news_raw"] = ga_news_raw
 
-    if st.button("Guard Me", key="ga_guard_me_btn", use_container_width=True):
+    _guard_left, _guard_mid, _guard_right = st.columns([4, 1, 4])
+    with _guard_mid:
+        guard_clicked = st.button("Guard Me", key="ga_guard_me_btn", use_container_width=False)
+    if guard_clicked:
         if not str(ga_symbol).strip():
             st.warning("Please enter symbol.")
         elif not str(ga_timeframe).strip():
@@ -3444,7 +3500,7 @@ def trading_control_panel_page():
                 <div class="tcp-bias-gauge-wrap">
                     <div class="tcp-bias-gauge">
                         <div class="tcp-bias-gauge-inner"></div>
-                        <div class="tcp-bias-arrow {bias_arrow_class}">▲</div>
+                        <div class="tcp-bias-arrow {bias_arrow_class}"></div>
                     </div>
                 </div>
                 <div class="tcp-bias-label {bias_label_class}">{state_bias}</div>
@@ -3590,7 +3646,7 @@ def trading_control_panel_page():
     with guardian_mid:
         st.markdown('<span id="tcp-guardian-btn-marker"></span>', unsafe_allow_html=True)
         if st.button(
-            "AI Guardian Angel",
+            "👼 AI Guardian Angel",
             key="tcp_ai_guardian_angel_btn",
             use_container_width=False,
         ):
