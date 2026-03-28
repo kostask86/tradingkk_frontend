@@ -3197,6 +3197,16 @@ def _build_alert_radar_figure(
     import matplotlib.pyplot as plt
     import numpy as np
 
+    # Cool dark + fluorescent cyan accent (matches TCP session radar ring).
+    _bg = "#1e2430"
+    _bg_ax = "#252b38"
+    _text = "#f7f9fc"
+    _text_muted = "#d2dce8"
+    _grid = "#4a5568"
+    _accent = "#5cefff"
+    _fill = "#4a8fd9"
+    _line = "#7eb8ff"
+
     def _f(v: object) -> float:
         try:
             return max(0.0, min(100.0, float(v if v is not None else 0.0)))
@@ -3213,8 +3223,8 @@ def _build_alert_radar_figure(
     r = np.array([s, b, v, p, s])
 
     fig, ax = plt.subplots(figsize=(3.8, 3.8), subplot_kw=dict(projection="polar"))
-    fig.patch.set_facecolor("white")
-    ax.set_facecolor("white")
+    fig.patch.set_facecolor(_bg)
+    ax.set_facecolor(_bg_ax)
 
     ax.set_theta_zero_location("N")
     ax.set_theta_direction(-1)
@@ -3222,8 +3232,9 @@ def _build_alert_radar_figure(
     ax.set_ylim(0, 100)
     ax.set_yticks([20, 40, 60, 80, 100])
     ax.set_rlabel_position(22)
-    ax.tick_params(axis="y", labelsize=7, colors="#333333")
-    ax.grid(True, color="#9a9a9a", linestyle="-", linewidth=0.7, alpha=0.95)
+    ax.tick_params(axis="y", labelsize=7, colors=_text_muted)
+    ax.tick_params(axis="x", colors=_text)
+    ax.grid(True, color=_grid, linestyle="-", linewidth=0.7, alpha=0.85)
 
     ax.set_xticks([0, np.pi / 2, np.pi, 3 * np.pi / 2])
     ax.set_xticklabels(
@@ -3234,35 +3245,43 @@ def _build_alert_radar_figure(
             "Pullback Quality",
         ],
         fontsize=7,
-        color="#111111",
+        color=_text,
     )
 
-    ax.fill(theta, r, color="#a8d0ff", alpha=0.42, zorder=3)
-    ax.plot(theta, r, color="#1a56c9", linewidth=1.8, zorder=4)
+    ax.fill(theta, r, color=_fill, alpha=0.4, zorder=3)
+    ax.plot(theta, r, color=_line, linewidth=1.8, zorder=4)
 
     spine = ax.spines.get("polar")
     if spine is not None:
-        spine.set_edgecolor("#000000")
-        spine.set_linewidth(1.2)
+        spine.set_edgecolor(_accent)
+        spine.set_linewidth(1.15)
 
     ax.set_title(
         "Trading Session Radar Snapshot",
         fontsize=10,
         fontweight="bold",
-        color="#111111",
-        pad=10,
+        color=_text,
+        pad=14,
     )
 
     fig.tight_layout()
     return fig
 
 
-def _alert_radar_figure_to_png(fig: object) -> bytes:
+def _alert_radar_figure_to_png(fig: object, *, pad_inches: float = 0.2) -> bytes:
     """Encode figure to PNG bytes. Avoids st.pyplot + plt.close races in dialogs."""
     import matplotlib.pyplot as plt
 
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=100, bbox_inches="tight", facecolor="white")
+    _fc = fig.get_facecolor()
+    fig.savefig(
+        buf,
+        format="png",
+        dpi=100,
+        bbox_inches="tight",
+        facecolor=_fc,
+        pad_inches=pad_inches,
+    )
     plt.close(fig)
     buf.seek(0)
     return buf.getvalue()
@@ -3931,12 +3950,16 @@ def trading_control_panel_page():
                 _sr_scores.get("pullback_quality"),
                 _sr_scores.get("volatility_fitness"),
             )
-            _sr_png = _alert_radar_figure_to_png(_sr_fig)
+            _sr_png = _alert_radar_figure_to_png(_sr_fig, pad_inches=0.55)
             _sr_b64 = base64.b64encode(_sr_png).decode("ascii")
             st.markdown(
-                f'<div style="display:flex;justify-content:center;width:100%;margin:0.15rem 0 0.35rem 0;">'
-                f'<img src="data:image/png;base64,{_sr_b64}" width="340" alt="Session radar" />'
-                f"</div>",
+                f'''<div style="display:flex;justify-content:center;width:100%;margin:0.15rem 0 0.35rem 0;">
+<div style="box-sizing:border-box;width:380px;height:380px;border-radius:50%;overflow:hidden;background:#1e2430;
+border:2px solid #5cefff;box-shadow:0 0 14px rgba(92,239,255,0.55),0 0 3px rgba(180,250,255,0.95);
+flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+<img src="data:image/png;base64,{_sr_b64}" alt="Session radar"
+style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;object-position:center;display:block;" />
+</div></div>''',
                 unsafe_allow_html=True,
             )
         except Exception:
