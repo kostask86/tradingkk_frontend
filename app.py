@@ -4,6 +4,7 @@ import io
 import streamlit as st
 import streamlit.components.v1 as components
 import api_client
+from session_knob_component import render_session_knob
 from api_client import APIError
 from datetime import datetime, timezone
 import time
@@ -609,6 +610,119 @@ st.markdown(
         margin-bottom: 0.5rem;
         text-align: center;
     }
+    .tcp-sess-knob-wrap {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 50px;
+        margin: 0 0 0.2rem 0;
+    }
+    .tcp-sess-knob-dial {
+        position: relative;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 42% 32%, #5a6578 0%, #343c4c 42%, #181d28 100%);
+        border: none;
+        box-shadow:
+            0 0 0 0.5px rgba(92, 239, 255, 0.75),
+            inset 0 2px 6px rgba(0,0,0,0.55),
+            0 0 3px rgba(92,239,255,0.2),
+            0 0 5px rgba(92,239,255,0.1);
+    }
+    .tcp-sess-knob-pointer {
+        position: absolute;
+        left: 50%;
+        bottom: 50%;
+        width: 3px;
+        height: 17px;
+        margin-left: -1.5px;
+        transform-origin: 50% 100%;
+        transform: rotate(var(--knob-deg, 0deg));
+        background: linear-gradient(to top, #3a8fa8 0%, #5cefff 100%);
+        border-radius: 2px;
+        z-index: 1;
+        box-shadow: 0 0 3px rgba(92,239,255,0.35);
+    }
+    .tcp-sess-knob-hub {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 10px;
+        height: 10px;
+        margin: -5px 0 0 -5px;
+        border-radius: 50%;
+        background: linear-gradient(180deg, #2d3545 0%, #1a1f2a 100%);
+        border: none;
+        z-index: 2;
+        box-shadow:
+            0 0 0 0.5px rgba(92, 239, 255, 0.65),
+            0 0 2px rgba(92, 239, 255, 0.22),
+            0 1px 3px rgba(0,0,0,0.45);
+    }
+    /* SESSION ID tile: match 140px siblings; kill Streamlit's fixed-height inner scroll */
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker) {
+        overflow: hidden !important;
+        min-height: 140px !important;
+        max-height: 140px !important;
+        height: 140px !important;
+        box-sizing: border-box !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker) > div {
+        padding-top: 0.45rem !important;
+        padding-bottom: 0.45rem !important;
+        box-sizing: border-box !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+        overflow-y: visible !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker) [data-testid="stVerticalBlock"] {
+        gap: 0 !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+        overflow-y: visible !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker) [data-testid="stElementContainer"] {
+        margin-bottom: 0 !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker)
+        [data-testid="stElementContainer"]:not(:has(iframe)) {
+        margin-top: 0 !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker)
+        [data-testid="stElementContainer"]:has(iframe) {
+        margin-top: 1.4rem !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker) iframe {
+        height: 48px !important;
+        min-height: 48px !important;
+        max-height: 48px !important;
+        width: 100% !important;
+        display: block !important;
+        border: none !important;
+        vertical-align: top !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker)
+        [data-testid="stElementContainer"]:has(.tcp-sess-knob-session-num) {
+        display: flex !important;
+        justify-content: center !important;
+        width: 100% !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker) .tcp-sess-knob-session-num {
+        text-align: center !important;
+        display: block !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        margin: 0.1rem 0 0 0 !important;
+        padding: 0 !important;
+        line-height: 1.1 !important;
+        font-weight: 800 !important;
+        font-size: 0.95rem !important;
+        color: #5cefff !important;
+        letter-spacing: 0.06em !important;
+        font-variant-numeric: tabular-nums !important;
+        text-shadow: 0 0 8px rgba(92, 239, 255, 0.28) !important;
+    }
     div:has(#tcp-rules-btn-marker) + div button {
         background: linear-gradient(180deg, #2a3f4d 0%, #1a2835 100%) !important;
         color: #7eb8d4 !important;
@@ -620,6 +734,11 @@ st.markdown(
     div:has(#tcp-rules-btn-marker) + div button:hover {
         color: #9ecde8 !important;
         box-shadow: 0 0 10px rgba(58, 144, 184, 0.35) !important;
+    }
+    div:has(#tcp-guardian-btn-marker) + div {
+        display: flex !important;
+        justify-content: center !important;
+        width: 100% !important;
     }
     div:has(#tcp-guardian-btn-marker) + div button {
         background: linear-gradient(180deg, #6f1d62 0%, #4d1246 100%) !important;
@@ -3254,7 +3373,7 @@ def _build_alert_radar_figure(
     spine = ax.spines.get("polar")
     if spine is not None:
         spine.set_edgecolor(_accent)
-        spine.set_linewidth(1.15)
+        spine.set_linewidth(1.0)
 
     ax.set_title(
         "Trading Session Radar Snapshot",
@@ -3491,7 +3610,14 @@ def trading_control_panel_page():
         unsafe_allow_html=True,
     )
 
-    knob_val = max(1, min(10, int(st.session_state.get("tcp_session_knob", 1))))
+    _knob_w = st.session_state.get("tcp_sess_knob_widget")
+    if _knob_w is not None:
+        try:
+            knob_val = max(1, min(10, int(_knob_w)))
+        except (TypeError, ValueError):
+            knob_val = max(1, min(10, int(st.session_state.get("tcp_session_knob", 1))))
+    else:
+        knob_val = max(1, min(10, int(st.session_state.get("tcp_session_knob", 1))))
     st.session_state["tcp_session_knob"] = knob_val
     session_id_tcp = knob_val
     knob_changed = int(st.session_state.get("tcp_current_session_id") or 0) != int(session_id_tcp)
@@ -3889,32 +4015,19 @@ def trading_control_panel_page():
         st.caption("Quick Controls")
         qc1, qc2, qc3, qc4 = st.columns(4)
         with qc1:
-            with st.container(border=True, height=140):
-                st.markdown('<div class="tcp-quick-subpanel-label">SESSION ID</div>', unsafe_allow_html=True)
-                knob_ui_value = st.slider(
-                    "SESSION ID",
-                    min_value=1,
-                    max_value=10,
-                    value=int(st.session_state.get("tcp_session_knob", 1)),
-                    key="tcp_session_knob_ui",
-                    label_visibility="collapsed",
+            # gap=None: default "small" gap stacks ~1rem between every child and blows past height=140 → scrollbar.
+            with st.container(border=True, height=140, gap=None):
+                st.markdown(
+                    '<div class="tcp-quick-subpanel-label" style="margin:0 0 1.7rem 0;line-height:1.25;text-align:center;position:relative;z-index:1;">SESSION ID</div>'
+                    '<span id="tcp-session-knob-marker" aria-hidden="true"></span>',
+                    unsafe_allow_html=True,
                 )
-                if int(st.session_state.get("tcp_session_knob", 1)) != int(knob_ui_value):
-                    st.session_state["tcp_session_knob"] = int(knob_ui_value)
-                    st.rerun()
+                render_session_knob(knob_val, key="tcp_sess_knob_widget", height=48)
+                st.markdown(
+                    f'<div class="tcp-sess-knob-session-num" style="text-align:center;width:100%;display:block;box-sizing:border-box;">{knob_val}</div>',
+                    unsafe_allow_html=True,
+                )
         with qc2:
-            with st.container(border=True, height=140):
-                st.markdown('<div class="tcp-quick-subpanel-label">AUTO REFRESH</div>', unsafe_allow_html=True)
-                _left, mid, _right = st.columns([1, 1, 1])
-                with mid:
-                    auto_refresh_simple = st.toggle(
-                        "Auto Refresh",
-                        value=bool(auto_on),
-                        key="tcp_auto_refresh_toggle",
-                        label_visibility="collapsed",
-                    )
-                st.session_state["tcp_auto_refresh_enabled"] = bool(auto_refresh_simple)
-        with qc3:
             with st.container(border=True, height=140):
                 st.markdown('<div class="tcp-quick-subpanel-label">ALERT FREEZE</div>', unsafe_allow_html=True)
                 freeze_class = "tcp-freeze-light-on" if alert_freeze_on else "tcp-freeze-light-off"
@@ -3927,6 +4040,22 @@ def trading_control_panel_page():
                     f'</div>',
                     unsafe_allow_html=True,
                 )
+        with qc3:
+            with st.container(border=True, height=140):
+                st.markdown('<div class="tcp-quick-subpanel-label">AUTO REFRESH</div>', unsafe_allow_html=True)
+                st.markdown(
+                    '<div style="height:28px;"></div>',
+                    unsafe_allow_html=True,
+                )
+                _ar_left, _ar_mid, _ar_right = st.columns([3, 2, 3])
+                with _ar_mid:
+                    auto_refresh_simple = st.toggle(
+                        "Auto Refresh",
+                        value=bool(auto_on),
+                        key="tcp_auto_refresh_toggle",
+                        label_visibility="collapsed",
+                    )
+                st.session_state["tcp_auto_refresh_enabled"] = bool(auto_refresh_simple)
         with qc4:
             with st.container(border=True, height=140):
                 st.markdown('<div class="tcp-quick-subpanel-label">RULES</div>', unsafe_allow_html=True)
@@ -3955,7 +4084,7 @@ def trading_control_panel_page():
             st.markdown(
                 f'''<div style="display:flex;justify-content:center;width:100%;margin:0.15rem 0 0.35rem 0;">
 <div style="box-sizing:border-box;width:380px;height:380px;border-radius:50%;overflow:hidden;background:#1e2430;
-border:2px solid #5cefff;box-shadow:0 0 14px rgba(92,239,255,0.55),0 0 3px rgba(180,250,255,0.95);
+box-shadow:0 0 0 0.5px #5cefff,0 0 8px rgba(92,239,255,0.22),0 0 1px rgba(180,250,255,0.4);
 flex-shrink:0;display:flex;align-items:center;justify-content:center;">
 <img src="data:image/png;base64,{_sr_b64}" alt="Session radar"
 style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;object-position:center;display:block;" />
@@ -3967,7 +4096,10 @@ style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;
 
     guardian_left, guardian_mid, guardian_right = st.columns([4, 2, 4])
     with guardian_mid:
-        st.markdown('<span id="tcp-guardian-btn-marker"></span>', unsafe_allow_html=True)
+        st.markdown(
+            '<span id="tcp-guardian-btn-marker" style="display:block;height:0;margin:0;padding:0;line-height:0;overflow:hidden;width:0" aria-hidden="true"></span>',
+            unsafe_allow_html=True,
+        )
         if st.button(
             "👼 AI Guardian Angel",
             key="tcp_ai_guardian_angel_btn",

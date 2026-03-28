@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      overflow: hidden;
+      height: 48px;
+      max-height: 48px;
+      font-family: "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    .wrap {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 48px;
+      max-height: 48px;
+      box-sizing: border-box;
+    }
+    .dial {
+      position: relative;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      cursor: grab;
+      background: radial-gradient(circle at 42% 32%, #5a6578 0%, #343c4c 42%, #181d28 100%);
+      border: none;
+      box-shadow:
+        0 0 0 0.5px rgba(92, 239, 255, 0.75),
+        inset 0 2px 6px rgba(0, 0, 0, 0.55),
+        0 0 3px rgba(92, 239, 255, 0.2),
+        0 0 5px rgba(92, 239, 255, 0.1);
+    }
+    .dial.dragging {
+      cursor: grabbing;
+    }
+    .pointer {
+      position: absolute;
+      left: 50%;
+      bottom: 50%;
+      width: 3px;
+      height: 17px;
+      margin-left: -1.5px;
+      transform-origin: 50% 100%;
+      background: linear-gradient(to top, #3a8fa8 0%, #5cefff 100%);
+      border-radius: 2px;
+      z-index: 1;
+      box-shadow: 0 0 3px rgba(92, 239, 255, 0.35);
+    }
+    .hub {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 10px;
+      height: 10px;
+      margin: -5px 0 0 -5px;
+      border-radius: 50%;
+      background: linear-gradient(180deg, #2d3545 0%, #1a1f2a 100%);
+      border: none;
+      z-index: 2;
+      box-shadow:
+        0 0 0 0.5px rgba(92, 239, 255, 0.65),
+        0 0 2px rgba(92, 239, 255, 0.22),
+        0 1px 3px rgba(0, 0, 0, 0.45);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="dial" id="dial" title="Drag to set session (1–10)">
+      <div class="pointer" id="pointer"></div>
+      <div class="hub"></div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var RENDER = "streamlit:render";
+      var FRAME_H = 48;
+      var lastHeight = -1;
+      var lastSentSession = null;
+
+      function post(type, data) {
+        window.parent.postMessage(
+          Object.assign({ isStreamlitMessage: true, type: type }, data || {}),
+          "*"
+        );
+      }
+
+      function setComponentReady() {
+        if (!window.__tcpKnobMsg) {
+          window.addEventListener("message", onWindowMessage);
+          window.__tcpKnobMsg = true;
+        }
+        post("streamlit:componentReady", { apiVersion: 1 });
+      }
+
+      function setFrameHeight(h) {
+        if (h === undefined || h === null) h = FRAME_H;
+        if (h === lastHeight) return;
+        lastHeight = h;
+        post("streamlit:setFrameHeight", { height: h });
+      }
+
+      function setComponentValue(value) {
+        post("streamlit:setComponentValue", { value: value, dataType: "json" });
+      }
+
+      function onWindowMessage(ev) {
+        var d = ev.data;
+        if (!d || d.type !== RENDER) return;
+        var args = d.args || {};
+        var s = parseInt(args.session, 10);
+        if (isNaN(s)) s = 1;
+        applySession(s, true);
+      }
+
+      function sessionToDeg(s) {
+        s = Math.max(1, Math.min(10, s));
+        return -135 + (s - 1) * (270 / 9);
+      }
+
+      function degToSession(deg) {
+        deg = Math.max(-135, Math.min(135, deg));
+        var k = Math.round((deg + 135) / 30);
+        k = Math.max(0, Math.min(9, k));
+        return k + 1;
+      }
+
+      function pointerDeg(deg) {
+        document.getElementById("pointer").style.transform = "rotate(" + deg + "deg)";
+      }
+
+      var dial = document.getElementById("dial");
+      var dragging = false;
+      var committedSession = 1;
+
+      function applySession(s, fromPython) {
+        s = Math.max(1, Math.min(10, s));
+        committedSession = s;
+        if (fromPython) lastSentSession = s;
+        pointerDeg(sessionToDeg(s));
+        setFrameHeight(FRAME_H);
+      }
+
+      function clientAngle(clientX, clientY) {
+        var r = dial.getBoundingClientRect();
+        var cx = r.left + r.width / 2;
+        var cy = r.top + r.height / 2;
+        var vx = clientX - cx;
+        var vy = clientY - cy;
+        return (Math.atan2(vx, -vy) * 180) / Math.PI;
+      }
+
+      function onPointerDown(e) {
+        if (e.button !== undefined && e.button !== 0) return;
+        dragging = true;
+        dial.classList.add("dragging");
+        var x = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] && e.touches[0].clientX);
+        var y = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] && e.touches[0].clientY);
+        if (x === undefined) return;
+        var deg = Math.max(-135, Math.min(135, clientAngle(x, y)));
+        pointerDeg(deg);
+        e.preventDefault();
+      }
+
+      function onPointerMove(e) {
+        if (!dragging) return;
+        var x = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] && e.touches[0].clientX);
+        var y = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] && e.touches[0].clientY);
+        if (x === undefined) return;
+        var deg = Math.max(-135, Math.min(135, clientAngle(x, y)));
+        pointerDeg(deg);
+        e.preventDefault();
+      }
+
+      function onPointerUp(e) {
+        if (!dragging) return;
+        dragging = false;
+        dial.classList.remove("dragging");
+        var x = e.clientX !== undefined ? e.clientX : (e.changedTouches && e.changedTouches[0] && e.changedTouches[0].clientX);
+        var y = e.clientY !== undefined ? e.clientY : (e.changedTouches && e.changedTouches[0] && e.changedTouches[0].clientY);
+        if (x === undefined) {
+          applySession(committedSession, false);
+          return;
+        }
+        var deg = Math.max(-135, Math.min(135, clientAngle(x, y)));
+        var s = degToSession(deg);
+        pointerDeg(sessionToDeg(s));
+        if (lastSentSession !== s) {
+          lastSentSession = s;
+          setComponentValue(s);
+        }
+        committedSession = s;
+        setFrameHeight(FRAME_H);
+        e.preventDefault();
+      }
+
+      dial.addEventListener("mousedown", onPointerDown);
+      window.addEventListener("mousemove", onPointerMove);
+      window.addEventListener("mouseup", onPointerUp);
+      dial.addEventListener("touchstart", onPointerDown, { passive: false });
+      window.addEventListener("touchmove", onPointerMove, { passive: false });
+      window.addEventListener("touchend", onPointerUp);
+      window.addEventListener("touchcancel", onPointerUp);
+
+      setComponentReady();
+      setFrameHeight(FRAME_H);
+    })();
+  </script>
+</body>
+</html>
