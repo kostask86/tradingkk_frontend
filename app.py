@@ -3194,7 +3194,7 @@ def _build_alert_radar_figure(
     theta = np.array([0.0, np.pi / 2, np.pi, 3 * np.pi / 2, 0.0])
     r = np.array([s, b, v, p, s])
 
-    fig, ax = plt.subplots(figsize=(6.0, 6.0), subplot_kw=dict(projection="polar"))
+    fig, ax = plt.subplots(figsize=(3.8, 3.8), subplot_kw=dict(projection="polar"))
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
@@ -3204,8 +3204,8 @@ def _build_alert_radar_figure(
     ax.set_ylim(0, 100)
     ax.set_yticks([20, 40, 60, 80, 100])
     ax.set_rlabel_position(22)
-    ax.tick_params(axis="y", labelsize=9, colors="#333333")
-    ax.grid(True, color="#9a9a9a", linestyle="-", linewidth=0.85, alpha=0.95)
+    ax.tick_params(axis="y", labelsize=7, colors="#333333")
+    ax.grid(True, color="#9a9a9a", linestyle="-", linewidth=0.7, alpha=0.95)
 
     ax.set_xticks([0, np.pi / 2, np.pi, 3 * np.pi / 2])
     ax.set_xticklabels(
@@ -3215,24 +3215,24 @@ def _build_alert_radar_figure(
             "Volatility Fitness",
             "Pullback Quality",
         ],
-        fontsize=9,
+        fontsize=7,
         color="#111111",
     )
 
     ax.fill(theta, r, color="#a8d0ff", alpha=0.42, zorder=3)
-    ax.plot(theta, r, color="#1a56c9", linewidth=2.2, zorder=4)
+    ax.plot(theta, r, color="#1a56c9", linewidth=1.8, zorder=4)
 
     spine = ax.spines.get("polar")
     if spine is not None:
         spine.set_edgecolor("#000000")
-        spine.set_linewidth(1.6)
+        spine.set_linewidth(1.2)
 
     ax.set_title(
         "Trading Session Radar Snapshot",
-        fontsize=13,
+        fontsize=10,
         fontweight="bold",
         color="#111111",
-        pad=18,
+        pad=10,
     )
 
     fig.tight_layout()
@@ -3244,7 +3244,7 @@ def _alert_radar_figure_to_png(fig: object) -> bytes:
     import matplotlib.pyplot as plt
 
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=120, bbox_inches="tight", facecolor="white")
+    fig.savefig(buf, format="png", dpi=100, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     buf.seek(0)
     return buf.getvalue()
@@ -3266,7 +3266,9 @@ def _show_alert_radar_dialog() -> None:
             payload.get("volatility_fitness"),
         )
         png = _alert_radar_figure_to_png(fig)
-        st.image(png, use_container_width=True)
+        _r1, _radar_mid, _r2 = st.columns([1, 2, 1])
+        with _radar_mid:
+            st.image(png, use_container_width=False, width=360)
     except Exception as e:
         st.error(f"Could not render radar chart: {e}")
 
