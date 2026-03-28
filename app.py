@@ -1,3 +1,4 @@
+import base64
 import html
 import io
 import streamlit as st
@@ -3163,6 +3164,23 @@ def _show_trading_rules_dialog():
             st.rerun()
 
 
+def _tcp_session_quality_scores(panel_data: object, session_detail: object) -> dict:
+    """Resolve bias/structure/pullback/volatility scores for the TCP session knob."""
+    keys = ("bias_strength", "structure_quality", "pullback_quality", "volatility_fitness")
+    panel = panel_data if isinstance(panel_data, dict) else {}
+    nested = panel.get("session") if isinstance(panel.get("session"), dict) else {}
+    sd = session_detail if isinstance(session_detail, dict) else {}
+    out = {}
+    for k in keys:
+        v = panel.get(k)
+        if v is None:
+            v = nested.get(k)
+        if v is None:
+            v = sd.get(k)
+        out[k] = v
+    return out
+
+
 def _build_alert_radar_figure(
     bias_strength: object,
     structure_quality: object,
@@ -3896,6 +3914,33 @@ def trading_control_panel_page():
                 st.markdown('<span id="tcp-rules-btn-marker"></span>', unsafe_allow_html=True)
                 if st.button("RULES", key="tcp_rules_btn", use_container_width=True):
                     _show_trading_rules_dialog()
+
+    with st.container(border=True):
+        st.markdown(
+            '<div class="tcp-quick-subpanel-label" style="margin-bottom:0.35rem;">SESSION RADAR</div>',
+            unsafe_allow_html=True,
+        )
+        _sr_scores = _tcp_session_quality_scores(
+            panel_data,
+            st.session_state.get("tcp_session_detail"),
+        )
+        try:
+            _sr_fig = _build_alert_radar_figure(
+                _sr_scores.get("bias_strength"),
+                _sr_scores.get("structure_quality"),
+                _sr_scores.get("pullback_quality"),
+                _sr_scores.get("volatility_fitness"),
+            )
+            _sr_png = _alert_radar_figure_to_png(_sr_fig)
+            _sr_b64 = base64.b64encode(_sr_png).decode("ascii")
+            st.markdown(
+                f'<div style="display:flex;justify-content:center;width:100%;margin:0.15rem 0 0.35rem 0;">'
+                f'<img src="data:image/png;base64,{_sr_b64}" width="340" alt="Session radar" />'
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        except Exception:
+            st.caption("Session radar could not be drawn. Load a valid session or refresh the panel.")
 
     guardian_left, guardian_mid, guardian_right = st.columns([4, 2, 4])
     with guardian_mid:
