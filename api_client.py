@@ -281,6 +281,31 @@ def provider_status(provider: str = "IBKR") -> dict:
     return _handle_response(resp)
 
 
+def get_provider_assets(provider: str) -> dict:
+    """GET /api/provider/assets — wallet / balance rows for the given provider (e.g. BYBIT)."""
+    resp = requests.get(
+        f"{BASE_URL}/api/provider/assets",
+        params={"provider": str(provider).strip()},
+    )
+    return _handle_response(resp)
+
+
+def get_provider_positions(
+    provider: str,
+    category: str = "linear",
+    symbol: Optional[str] = None,
+) -> dict:
+    """GET /api/provider/positions (e.g. Bybit). Omits settle_coin / base_coin query params."""
+    params: dict = {
+        "provider": str(provider).strip(),
+        "category": str(category).strip() or "linear",
+    }
+    if symbol and str(symbol).strip():
+        params["symbol"] = str(symbol).strip().upper()
+    resp = requests.get(f"{BASE_URL}/api/provider/positions", params=params)
+    return _handle_response(resp)
+
+
 def get_test_bars(
     symbol: str,
     provider: str = "IBKR",

@@ -2473,6 +2473,7 @@ def sessions_page():
 # ── Provider page ─────────────────────────────────────────────────────
 
 SEC_TYPES = ["STK", "FOREX", "SPOT"]
+PROVIDER_POSITION_CATEGORIES = ["linear", "inverse", "option"]
 
 def provider_page():
     st.header("Provider Gateway")
@@ -2516,6 +2517,160 @@ def provider_page():
         with st.container(border=True):
             st.markdown("**Gateway Status**")
             st.json(st.session_state["provider_status"])
+
+    st.divider()
+
+    # ── Provider assets (wallet) ─────────────────────────────────────
+    st.subheader("Provider assets")
+    _pa_pick, _pa_go = st.columns([3, 1])
+    with _pa_pick:
+        assets_provider = st.selectbox(
+            "Provider",
+            PROVIDERS,
+            index=PROVIDERS.index(selected_provider) if selected_provider in PROVIDERS else 0,
+            key="provider_assets_provider",
+        )
+    with _pa_go:
+        fetch_assets = st.button("Fetch assets", key="provider_assets_fetch", use_container_width=True)
+
+    if fetch_assets:
+        try:
+            st.session_state["provider_assets_result"] = api_client.get_provider_assets(provider=str(assets_provider))
+            st.session_state.pop("provider_assets_error", None)
+        except APIError as e:
+            st.session_state["provider_assets_error"] = e.detail
+            st.session_state.pop("provider_assets_result", None)
+        except Exception as e:
+            st.session_state["provider_assets_error"] = str(e)
+            st.session_state.pop("provider_assets_result", None)
+
+    _pa_err = st.session_state.get("provider_assets_error")
+    if _pa_err:
+        st.error(f"Assets request failed: {_pa_err}")
+
+    _pa_res = st.session_state.get("provider_assets_result")
+    if isinstance(_pa_res, dict):
+        with st.container(border=True):
+            st.markdown("**Response**")
+            _sum = st.columns(4)
+            with _sum[0]:
+                st.metric("Provider", str(_pa_res.get("provider") or "—"))
+            with _sum[1]:
+                st.metric("Account type", str(_pa_res.get("account_type") or "—"))
+            with _sum[2]:
+                st.metric("Total equity", str(_pa_res.get("total_equity") or "—"))
+            with _sum[3]:
+                st.metric("Total wallet", str(_pa_res.get("total_wallet_balance") or "—"))
+            _sum2 = st.columns(2)
+            with _sum2[0]:
+                st.metric("Available balance", str(_pa_res.get("total_available_balance") or "—"))
+
+            _assets_list = _pa_res.get("assets")
+            if isinstance(_assets_list, list) and _assets_list:
+                st.markdown("**Balances by coin**")
+                _rows = []
+                for _a in _assets_list:
+                    if not isinstance(_a, dict):
+                        continue
+                    _rows.append(
+                        {
+                            "Coin": _a.get("coin"),
+                            "Wallet balance": _a.get("wallet_balance"),
+                        }
+                    )
+                if _rows:
+                    st.dataframe(_rows, use_container_width=True, hide_index=True)
+                else:
+                    st.caption("No asset rows to display.")
+            else:
+                st.caption("No `assets` array in response.")
+
+            with st.expander("Full JSON", expanded=False):
+                st.json(_pa_res)
+
+    st.divider()
+
+    # ── Provider positions ────────────────────────────────────────────
+    st.subheader("Provider positions")
+    _pp_row1 = st.columns([2, 1, 2, 1])
+    with _pp_row1[0]:
+        pp_provider = st.selectbox(
+            "Provider",
+            PROVIDERS,
+            index=PROVIDERS.index(selected_provider) if selected_provider in PROVIDERS else 0,
+            key="provider_positions_provider",
+        )
+    with _pp_row1[1]:
+        pp_category = st.selectbox(
+            "Category",
+            PROVIDER_POSITION_CATEGORIES,
+            index=0,
+            key="provider_positions_category",
+        )
+    with _pp_row1[2]:
+        pp_instrument = st.text_input(
+            "Instrument",
+            placeholder="Optional, e.g. BTCUSDT",
+            key="provider_positions_instrument",
+        )
+    with _pp_row1[3]:
+        fetch_positions = st.button("Fetch positions", key="provider_positions_fetch", use_container_width=True)
+
+    if fetch_positions:
+        try:
+            _pp_sym = pp_instrument.strip() if pp_instrument else None
+            st.session_state["provider_positions_result"] = api_client.get_provider_positions(
+                provider=str(pp_provider),
+                category=str(pp_category),
+                symbol=_pp_sym,
+            )
+            st.session_state.pop("provider_positions_error", None)
+        except APIError as e:
+            st.session_state["provider_positions_error"] = e.detail
+            st.session_state.pop("provider_positions_result", None)
+        except Exception as e:
+            st.session_state["provider_positions_error"] = str(e)
+            st.session_state.pop("provider_positions_result", None)
+
+    _pp_err = st.session_state.get("provider_positions_error")
+    if _pp_err:
+        st.error(f"Positions request failed: {_pp_err}")
+
+    _pp_res = st.session_state.get("provider_positions_result")
+    if isinstance(_pp_res, dict):
+        with st.container(border=True):
+            st.markdown("**Response**")
+            _ppc = st.columns(2)
+            with _ppc[0]:
+                st.metric("Provider", str(_pp_res.get("provider") or "—"))
+            with _ppc[1]:
+                st.metric("Category", str(_pp_res.get("category") or "—"))
+
+            _pos_list = _pp_res.get("positions")
+            if isinstance(_pos_list, list) and _pos_list:
+                st.markdown("**Open positions**")
+                _prows = []
+                for _p in _pos_list:
+                    if not isinstance(_p, dict):
+                        continue
+                    _prows.append(
+                        {
+                            "Symbol": _p.get("symbol"),
+                            "Side": _p.get("side"),
+                            "Size": _p.get("size"),
+                            "Avg price": _p.get("avg_price"),
+                            "Unrealised PnL": _p.get("unrealised_pnl"),
+                        }
+                    )
+                if _prows:
+                    st.dataframe(_prows, use_container_width=True, hide_index=True)
+                else:
+                    st.caption("No position rows to display.")
+            else:
+                st.caption("No `positions` array in response.")
+
+            with st.expander("Full JSON", expanded=False):
+                st.json(_pp_res)
 
     st.divider()
 
