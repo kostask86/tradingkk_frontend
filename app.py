@@ -3352,16 +3352,17 @@ def _build_alert_radar_figure(
     ax.set_yticks([20, 40, 60, 80, 100])
     ax.set_rlabel_position(22)
     ax.tick_params(axis="y", labelsize=7, colors=_text_muted)
-    ax.tick_params(axis="x", colors=_text)
+    # Multiline labels + modest pad: stay outside the fill without shrinking the polar area too much.
+    ax.tick_params(axis="x", colors=_text, labelsize=7, pad=14)
     ax.grid(True, color=_grid, linestyle="-", linewidth=0.7, alpha=0.85)
 
     ax.set_xticks([0, np.pi / 2, np.pi, 3 * np.pi / 2])
     ax.set_xticklabels(
         [
-            "Structure Quality",
-            "Bias Strength",
-            "Volatility Fitness",
-            "Pullback Quality",
+            "Structure\nQuality",
+            "Bias\nStrength",
+            "Volatility\nFitness",
+            "Pullback\nQuality",
         ],
         fontsize=7,
         color=_text,
@@ -3424,7 +3425,7 @@ def _show_alert_radar_dialog() -> None:
         png = _alert_radar_figure_to_png(fig)
         _r1, _radar_mid, _r2 = st.columns([1, 2, 1])
         with _radar_mid:
-            st.image(png, use_container_width=False, width=360)
+            st.image(png, use_container_width=False, width=400)
     except Exception as e:
         st.error(f"Could not render radar chart: {e}")
 
@@ -4079,11 +4080,11 @@ def trading_control_panel_page():
                 _sr_scores.get("pullback_quality"),
                 _sr_scores.get("volatility_fitness"),
             )
-            _sr_png = _alert_radar_figure_to_png(_sr_fig, pad_inches=0.55)
+            _sr_png = _alert_radar_figure_to_png(_sr_fig, pad_inches=0.42)
             _sr_b64 = base64.b64encode(_sr_png).decode("ascii")
             st.markdown(
                 f'''<div style="display:flex;justify-content:center;width:100%;margin:0.15rem 0 0.35rem 0;">
-<div style="box-sizing:border-box;width:380px;height:380px;border-radius:50%;overflow:hidden;background:#1e2430;
+<div style="box-sizing:border-box;width:400px;height:400px;border-radius:50%;overflow:hidden;background:#1e2430;
 box-shadow:0 0 0 0.5px #5cefff,0 0 8px rgba(92,239,255,0.22),0 0 1px rgba(180,250,255,0.4);
 flex-shrink:0;display:flex;align-items:center;justify-content:center;">
 <img src="data:image/png;base64,{_sr_b64}" alt="Session radar"
