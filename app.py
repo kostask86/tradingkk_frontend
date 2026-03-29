@@ -359,11 +359,13 @@ st.markdown(
         border-radius: 50%;
     }
     .tcp-vol-light-low { background: #3b82f6; }
-    .tcp-vol-light-normal { background: #22c55e; }
+    .tcp-vol-light-normal { background: #f59e0b; }
+    .tcp-vol-light-elevated { background: #22c55e; }
     .tcp-vol-light-high { background: #ef4444; }
     .tcp-vol-light-active { box-shadow: 0 0 10px currentColor, 0 0 20px currentColor; }
     .tcp-vol-light-low.tcp-vol-light-active { color: #3b82f6; }
-    .tcp-vol-light-normal.tcp-vol-light-active { color: #22c55e; }
+    .tcp-vol-light-normal.tcp-vol-light-active { color: #f59e0b; }
+    .tcp-vol-light-elevated.tcp-vol-light-active { color: #22c55e; }
     .tcp-vol-light-high.tcp-vol-light-active { color: #ef4444; }
     .tcp-vol-data {
         font-size: 0.75rem;
@@ -871,12 +873,36 @@ def _bias_colored_html(value: str | None) -> str:
     return f"<span style='color: {color}; font-weight: 700;'>{bias}</span>"
 
 
+def _volatility_band_from_vol_ratio(vol_ratio: object) -> str | None:
+    """LOW < 0.80, NORMAL [0.80, 1.00), ELEVATED [1.00, 1.2), HIGH >= 1.2."""
+    try:
+        x = float(vol_ratio)
+    except (TypeError, ValueError):
+        return None
+    if x < 0.80:
+        return "LOW"
+    if x < 1.00:
+        return "NORMAL"
+    if x < 1.2:
+        return "ELEVATED"
+    return "HIGH"
+
+
+def _tcp_resolve_volatility_status(latest_vol: dict) -> str:
+    raw = str((latest_vol or {}).get("volatility_status") or "").strip().upper()
+    if raw in ("LOW", "NORMAL", "ELEVATED", "HIGH"):
+        return raw
+    derived = _volatility_band_from_vol_ratio((latest_vol or {}).get("vol_ratio"))
+    return derived if derived else "NORMAL"
+
+
 def _volatility_status_colored_html(value: str | None) -> str:
     status = (value or "—").upper()
     color_map = {
-        "LOW": "#9aa0a6",
-        "NORMAL": "#2ca02c",
-        "HIGH": "#d62728",
+        "LOW": "#3b82f6",
+        "NORMAL": "#f59e0b",
+        "ELEVATED": "#22c55e",
+        "HIGH": "#ef4444",
     }
     color = color_map.get(status, "#9aa0a6")
     return f"<span style='color: {color}; font-weight: 700;'>{status}</span>"
@@ -1366,11 +1392,13 @@ def sessions_page():
                 def _volatility_status_style(value):
                     s = str(value).upper()
                     if s == "LOW":
-                        return "color: #9aa0a6; font-weight: 700;"
+                        return "color: #3b82f6; font-weight: 700;"
                     if s == "NORMAL":
-                        return "color: #2ca02c; font-weight: 700;"
+                        return "color: #f59e0b; font-weight: 700;"
+                    if s == "ELEVATED":
+                        return "color: #22c55e; font-weight: 700;"
                     if s == "HIGH":
-                        return "color: #d62728; font-weight: 700;"
+                        return "color: #ef4444; font-weight: 700;"
                     return ""
 
                 styled_df = df.style
@@ -4002,8 +4030,8 @@ def trading_control_panel_page():
         alert_freeze_on = alert_freeze_raw.strip().lower() in ("true", "1", "yes", "on")
     else:
         alert_freeze_on = False
-    vol_status = (lv.get("volatility_status") or "NORMAL").upper()
-    vr = lv.get("vol_ratio")
+    vol_status = _tcp_resolve_volatility_status(lv if isinstance(lv, dict) else {})
+    vr = lv.get("vol_ratio") if isinstance(lv, dict) else None
     try:
         vol_ratio = f"{float(vr):.2f}" if vr is not None else "—"
     except (TypeError, ValueError):
@@ -4043,6 +4071,7 @@ def trading_control_panel_page():
 
     low_active = " tcp-vol-light-active" if vol_status == "LOW" else ""
     norm_active = " tcp-vol-light-active" if vol_status == "NORMAL" else ""
+    elev_active = " tcp-vol-light-active" if vol_status == "ELEVATED" else ""
     high_active = " tcp-vol-light-active" if vol_status == "HIGH" else ""
 
     with st.container(border=True):
@@ -4069,9 +4098,10 @@ def trading_control_panel_page():
             <div class="tcp-panel">
                 <div class="tcp-panel-label">VOLATILITY</div>
                 <div class="tcp-vol-lights">
-                    <span class="tcp-vol-light tcp-vol-light-low{low_active}" title="LOW"></span>
-                    <span class="tcp-vol-light tcp-vol-light-normal{norm_active}" title="NORMAL"></span>
-                    <span class="tcp-vol-light tcp-vol-light-high{high_active}" title="HIGH"></span>
+                    <span class="tcp-vol-light tcp-vol-light-low{low_active}" title="LOW (vol_ratio &lt; 0.80)"></span>
+                    <span class="tcp-vol-light tcp-vol-light-normal{norm_active}" title="NORMAL (0.80–1.00)"></span>
+                    <span class="tcp-vol-light tcp-vol-light-elevated{elev_active}" title="ELEVATED (1.00–1.2)"></span>
+                    <span class="tcp-vol-light tcp-vol-light-high{high_active}" title="HIGH (≥ 1.2)"></span>
                 </div>
                 <div class="tcp-vol-data">VOL RATIO {vol_ratio}</div>
                 <div class="tcp-vol-data">STATUS: {vol_status}</div>
