@@ -2422,6 +2422,27 @@ def sessions_page():
                 with trade_info_cols[2]:
                     st.caption(f"Stop Loss %: **{sess.get('trade_stop_loss_pct', '—')}**")
 
+                trade_toggle_cols = st.columns([1, 1, 3])
+                with trade_toggle_cols[0]:
+                    _trade_mode_ui = st.toggle(
+                        "Trade Mode",
+                        value=bool(sess.get("trade_mode", False)),
+                        key=f"trade_mode_toggle_{sid}",
+                    )
+                with trade_toggle_cols[1]:
+                    if st.button("Update", key=f"trade_mode_update_{sid}", use_container_width=True):
+                        try:
+                            api_client.update_session(sid, trade_mode=bool(_trade_mode_ui))
+                            st.success(
+                                f"Session #{sid} trade mode set to "
+                                f"{'ON' if bool(_trade_mode_ui) else 'OFF'}."
+                            )
+                            st.rerun()
+                        except APIError as e:
+                            st.error(f"Failed to update trade mode: {e.detail}")
+                        except Exception as e:
+                            st.error(f"Connection error: {e}")
+
                 # ── Action buttons ────────────────────────────────────────
                 btn_cols = st.columns(5)
 
