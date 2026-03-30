@@ -2223,6 +2223,12 @@ def sessions_page():
                     st.metric("trade_take_profit_pct", metadata.get("trade_take_profit_pct", "—"))
                 with md_cols_3[3]:
                     st.metric("trade_stop_loss_pct", metadata.get("trade_stop_loss_pct", "—"))
+
+                md_cols_4 = st.columns(2)
+                with md_cols_4[0]:
+                    st.metric("tp_percentage", metadata.get("tp_percentage", "—"))
+                with md_cols_4[1]:
+                    st.metric("sl_percentage", metadata.get("sl_percentage", "—"))
                 st.json(metadata)
 
         # ── Create session form ───────────────────────────────────────
@@ -2264,12 +2270,36 @@ def sessions_page():
                         "Trade Stop Loss %", min_value=0.0, value=0.5, step=0.1
                     )
 
+                extra_trade_cols = st.columns(2)
+                with extra_trade_cols[0]:
+                    tp_percentage_raw = st.text_input(
+                        "TP Percentage (optional)",
+                        value="",
+                        placeholder="e.g. 1.2",
+                    )
+                with extra_trade_cols[1]:
+                    sl_percentage_raw = st.text_input(
+                        "SL Percentage (optional)",
+                        value="",
+                        placeholder="e.g. 0.8",
+                    )
+
                 submitted = st.form_submit_button("Create Session", use_container_width=True)
                 if submitted:
                     if not symbol or not symbol.strip():
                         st.error("Symbol is required.")
                     else:
                         try:
+                            tp_percentage = (
+                                float(tp_percentage_raw.strip())
+                                if isinstance(tp_percentage_raw, str) and tp_percentage_raw.strip()
+                                else None
+                            )
+                            sl_percentage = (
+                                float(sl_percentage_raw.strip())
+                                if isinstance(sl_percentage_raw, str) and sl_percentage_raw.strip()
+                                else None
+                            )
                             new_session = api_client.create_session(
                                 symbol=symbol,
                                 provider=provider,
@@ -2283,9 +2313,13 @@ def sessions_page():
                                 trade_mode=bool(trade_mode),
                                 trade_take_profit_pct=float(trade_take_profit_pct),
                                 trade_stop_loss_pct=float(trade_stop_loss_pct),
+                                tp_percentage=tp_percentage,
+                                sl_percentage=sl_percentage,
                             )
                             st.success(f"Session **#{new_session['id']}** created for **{new_session['symbol']}**")
                             st.rerun()
+                        except ValueError:
+                            st.error("TP/SL Percentage must be numeric when provided.")
                         except APIError as e:
                             st.error(f"Failed to create session: {e.detail}")
                         except Exception as e:
@@ -2410,7 +2444,7 @@ def sessions_page():
                 st.caption(f"Last Alert At: **{_fmt_dt(sess.get('last_alert_at'))}**")
 
                 # Trade controls (optional fields added to SessionRead)
-                trade_info_cols = st.columns(3)
+                trade_info_cols = st.columns(5)
                 with trade_info_cols[0]:
                     _tm = sess.get("trade_mode")
                     if _tm is None:
@@ -2421,6 +2455,10 @@ def sessions_page():
                     st.caption(f"Take Profit %: **{sess.get('trade_take_profit_pct', '—')}**")
                 with trade_info_cols[2]:
                     st.caption(f"Stop Loss %: **{sess.get('trade_stop_loss_pct', '—')}**")
+                with trade_info_cols[3]:
+                    st.caption(f"TP Percentage: **{sess.get('tp_percentage', '—')}**")
+                with trade_info_cols[4]:
+                    st.caption(f"SL Percentage: **{sess.get('sl_percentage', '—')}**")
 
                 trade_toggle_cols = st.columns([1, 1, 3])
                 with trade_toggle_cols[0]:
@@ -4105,6 +4143,21 @@ def trading_control_panel_page():
         alert_freeze_on = alert_freeze_raw.strip().lower() in ("true", "1", "yes", "on")
     else:
         alert_freeze_on = False
+    trade_mode_raw = session_data_tcp.get("trade_mode")
+    if trade_mode_raw is None:
+        trade_mode_raw = (panel_data or {}).get("trade_mode")
+    if trade_mode_raw is None:
+        trade_mode_raw = ((panel_data or {}).get("session") or {}).get("trade_mode")
+    if isinstance(trade_mode_raw, bool):
+        trade_mode_on = trade_mode_raw
+    elif isinstance(trade_mode_raw, (int, float)):
+        trade_mode_on = bool(trade_mode_raw)
+    elif isinstance(trade_mode_raw, str):
+        trade_mode_on = trade_mode_raw.strip().lower() in ("true", "1", "yes", "on")
+    else:
+        trade_mode_on = False
+    trade_mode_text = "ON" if trade_mode_on else "OFF"
+    trade_mode_color = "#22c55e" if trade_mode_on else "#9aa0a6"
     vol_status = _tcp_resolve_volatility_status(lv if isinstance(lv, dict) else {})
     vr = lv.get("vol_ratio") if isinstance(lv, dict) else None
     try:
@@ -4262,9 +4315,14 @@ def trading_control_panel_page():
             <div class="tcp-panel tcp-panel-controls">
                 <div class="tcp-panel-label">CONTROLS</div>
                 <div style="height: 90px; display: flex; align-items: center; justify-content: center;">
-                    <div class="tcp-session-status">
+                    <div class="tcp-session-status" style="flex-direction:column;gap:0.28rem;">
+                        <div style="display:flex;align-items:center;gap:0.5rem;">
                         <span class="tcp-session-led {sess_led}"></span>
                         <span class="tcp-session-status-text {sess_txt}">SESSION: {sess_status if sess_status != "—" else "NO SESSION"}</span>
+                        </div>
+                        <div style="font-size:0.69rem;font-weight:700;letter-spacing:0.05em;color:{trade_mode_color};">
+                            TRADE MODE: {trade_mode_text}
+                        </div>
                     </div>
                 </div>
             </div>

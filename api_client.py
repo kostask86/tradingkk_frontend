@@ -39,6 +39,8 @@ def create_session(
     trade_mode: bool = False,
     trade_take_profit_pct: float = 1.0,
     trade_stop_loss_pct: float = 0.5,
+    tp_percentage: Optional[float] = None,
+    sl_percentage: Optional[float] = None,
 ) -> dict:
     payload = {
         "symbol": symbol.upper().strip(),
@@ -54,6 +56,10 @@ def create_session(
         "trade_take_profit_pct": float(trade_take_profit_pct),
         "trade_stop_loss_pct": float(trade_stop_loss_pct),
     }
+    if tp_percentage is not None:
+        payload["tp_percentage"] = float(tp_percentage)
+    if sl_percentage is not None:
+        payload["sl_percentage"] = float(sl_percentage)
     resp = requests.post(f"{BASE_URL}/api/sessions/", json=payload)
     return _handle_response(resp, 201)
 
