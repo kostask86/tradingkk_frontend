@@ -36,6 +36,9 @@ def create_session(
     persistence_threshold: int = 15,
     swing_lookback: int = 2,
     cooldown_until: int = 5,
+    trade_mode: bool = False,
+    trade_take_profit_pct: float = 1.0,
+    trade_stop_loss_pct: float = 0.5,
 ) -> dict:
     payload = {
         "symbol": symbol.upper().strip(),
@@ -47,6 +50,9 @@ def create_session(
         "persistence_threshold": persistence_threshold,
         "swing_lookback": swing_lookback,
         "cooldown_until": cooldown_until,
+        "trade_mode": bool(trade_mode),
+        "trade_take_profit_pct": float(trade_take_profit_pct),
+        "trade_stop_loss_pct": float(trade_stop_loss_pct),
     }
     resp = requests.post(f"{BASE_URL}/api/sessions/", json=payload)
     return _handle_response(resp, 201)

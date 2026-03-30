@@ -990,6 +990,26 @@ def _tcp_auto_refresh_fragment() -> None:
         st.session_state["tcp_session_detail"] = session_detail if isinstance(session_detail, dict) else {}
         panel_result = api_client.get_trading_control_panel(int(session_id))
         st.session_state["tcp_panel_result"] = panel_result
+        # The small chart on the TCP page uses `tcp_viz_result`, so refresh it too.
+        # Keep bar count aligned with the TCP chart (50 bars).
+        try:
+            viz_result = api_client.visualize_session(int(session_id), 50)
+            if isinstance(viz_result, dict):
+                st.session_state["tcp_viz_result"] = viz_result
+                st.session_state.pop("tcp_viz_error", None)
+        except Exception:
+            # If chart refresh fails, keep the previous `tcp_viz_result`.
+            pass
+
+        # Keep the auto-refresh cadence aligned with the backend session timeframe when available.
+        if isinstance(panel_result, dict):
+            tf = (panel_result.get("session") or {}).get("timeframe", "1m")
+            st.session_state["tcp_auto_refresh_cfg"] = {
+                "session_id": int(session_id),
+                "timeframe": tf,
+                "interval_seconds": _refresh_seconds_for_timeframe(tf),
+            }
+
         st.session_state["tcp_last_fetch_ts"] = time.time()
         st.session_state.pop("tcp_error", None)
         st.rerun()
@@ -2197,6 +2217,12 @@ def sessions_page():
                 md_cols_3 = st.columns(4)
                 with md_cols_3[0]:
                     st.metric("cooldown_until", metadata.get("cooldown_until", "—"))
+                with md_cols_3[1]:
+                    st.metric("trade_mode", metadata.get("trade_mode", "—"))
+                with md_cols_3[2]:
+                    st.metric("trade_take_profit_pct", metadata.get("trade_take_profit_pct", "—"))
+                with md_cols_3[3]:
+                    st.metric("trade_stop_loss_pct", metadata.get("trade_stop_loss_pct", "—"))
                 st.json(metadata)
 
         # ── Create session form ───────────────────────────────────────
@@ -2226,6 +2252,18 @@ def sessions_page():
                     swing_lookback = st.number_input("Swing Lookback", min_value=1, value=2, step=1)
                 cooldown_until = st.number_input("Cooldown Until", min_value=0, value=5, step=1)
 
+                trade_cols = st.columns(3)
+                with trade_cols[0]:
+                    trade_mode = st.toggle("Trade Mode", value=False)
+                with trade_cols[1]:
+                    trade_take_profit_pct = st.number_input(
+                        "Trade Take Profit %", min_value=0.0, value=1.0, step=0.1
+                    )
+                with trade_cols[2]:
+                    trade_stop_loss_pct = st.number_input(
+                        "Trade Stop Loss %", min_value=0.0, value=0.5, step=0.1
+                    )
+
                 submitted = st.form_submit_button("Create Session", use_container_width=True)
                 if submitted:
                     if not symbol or not symbol.strip():
@@ -2242,6 +2280,9 @@ def sessions_page():
                                 persistence_threshold=int(persistence_threshold),
                                 swing_lookback=int(swing_lookback),
                                 cooldown_until=int(cooldown_until),
+                                trade_mode=bool(trade_mode),
+                                trade_take_profit_pct=float(trade_take_profit_pct),
+                                trade_stop_loss_pct=float(trade_stop_loss_pct),
                             )
                             st.success(f"Session **#{new_session['id']}** created for **{new_session['symbol']}**")
                             st.rerun()
@@ -2367,6 +2408,19 @@ def sessions_page():
                     st.caption(f"PB Start At: **{_fmt_dt(sess.get('pb_start_at'))}**")
 
                 st.caption(f"Last Alert At: **{_fmt_dt(sess.get('last_alert_at'))}**")
+
+                # Trade controls (optional fields added to SessionRead)
+                trade_info_cols = st.columns(3)
+                with trade_info_cols[0]:
+                    _tm = sess.get("trade_mode")
+                    if _tm is None:
+                        st.caption("Trade Mode: **—**")
+                    else:
+                        st.caption(f"Trade Mode: **{'ON' if bool(_tm) else 'OFF'}**")
+                with trade_info_cols[1]:
+                    st.caption(f"Take Profit %: **{sess.get('trade_take_profit_pct', '—')}**")
+                with trade_info_cols[2]:
+                    st.caption(f"Stop Loss %: **{sess.get('trade_stop_loss_pct', '—')}**")
 
                 # ── Action buttons ────────────────────────────────────────
                 btn_cols = st.columns(5)
