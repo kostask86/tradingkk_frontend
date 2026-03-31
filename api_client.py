@@ -335,6 +335,23 @@ def get_provider_positions(
     return _handle_response(resp)
 
 
+def set_provider_leverage(
+    provider: str,
+    instrument: str,
+    leverage: float,
+    category: str = "inverse",
+) -> dict:
+    """POST /api/provider/setleverage — set leverage for a symbol (Bybit)."""
+    payload = {
+        "provider": str(provider).strip(),
+        "instrument": str(instrument).strip().upper(),
+        "leverage": float(leverage),
+        "category": str(category).strip() or "inverse",
+    }
+    resp = requests.post(f"{BASE_URL}/api/provider/setleverage", json=payload)
+    return _handle_response(resp)
+
+
 def get_test_bars(
     symbol: str,
     provider: str = "IBKR",

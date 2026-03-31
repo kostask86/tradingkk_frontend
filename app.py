@@ -2894,6 +2894,72 @@ def provider_page():
             with st.expander("Full JSON", expanded=False):
                 st.json(_pp_res)
 
+    with st.container(border=True):
+        st.markdown("**Set leverage**")
+        lev_cols = st.columns([2, 2, 2, 1])
+        with lev_cols[0]:
+            lev_provider = st.selectbox(
+                "Provider",
+                PROVIDERS,
+                index=PROVIDERS.index(selected_provider) if selected_provider in PROVIDERS else 0,
+                key="provider_leverage_provider",
+            )
+        with lev_cols[1]:
+            lev_instrument = st.text_input(
+                "Instrument",
+                placeholder="e.g. BTCUSDT",
+                key="provider_leverage_instrument",
+            )
+        with lev_cols[2]:
+            lev_value = st.number_input(
+                "Leverage",
+                min_value=0.01,
+                max_value=200.0,
+                value=5.0,
+                step=1.0,
+                key="provider_leverage_value",
+            )
+        with lev_cols[3]:
+            st.write("")
+            do_set_leverage = st.button("Set", use_container_width=True, key="provider_leverage_set_btn")
+
+        # Use the positions category when compatible (linear/inverse); otherwise fall back.
+        lev_category_default = pp_category if str(pp_category) in ("linear", "inverse") else "inverse"
+        lev_category = st.selectbox(
+            "Category",
+            ["linear", "inverse"],
+            index=0 if lev_category_default == "linear" else 1,
+            key="provider_leverage_category",
+        )
+
+        if do_set_leverage:
+            if not lev_instrument or not lev_instrument.strip():
+                st.error("Instrument is required.")
+            else:
+                try:
+                    st.session_state["provider_leverage_result"] = api_client.set_provider_leverage(
+                        provider=str(lev_provider),
+                        instrument=str(lev_instrument),
+                        leverage=float(lev_value),
+                        category=str(lev_category),
+                    )
+                    st.session_state.pop("provider_leverage_error", None)
+                except APIError as e:
+                    st.session_state["provider_leverage_error"] = e.detail
+                    st.session_state.pop("provider_leverage_result", None)
+                except Exception as e:
+                    st.session_state["provider_leverage_error"] = str(e)
+                    st.session_state.pop("provider_leverage_result", None)
+
+        _lev_err = st.session_state.get("provider_leverage_error")
+        if _lev_err:
+            st.error(f"Set leverage failed: {_lev_err}")
+        _lev_res = st.session_state.get("provider_leverage_result")
+        if isinstance(_lev_res, dict):
+            st.success("Leverage updated.")
+            with st.expander("Response JSON", expanded=False):
+                st.json(_lev_res)
+
     st.divider()
 
     # ── Test Bar ──────────────────────────────────────────────────────
