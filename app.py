@@ -1106,8 +1106,16 @@ with st.sidebar:
 
 def sessions_page():
     st.header("Session")
-    sessions_tab, bias_tab, pullback_tab, volatility_tab, visualize_tab, alerts_tab = st.tabs(
-        ["Session", "Bias Calculations", "Pullback Calculations", "Volatility Calculations", "Visualize", "Alerts"]
+    sessions_tab, bias_tab, pullback_tab, volatility_tab, visualize_tab, alerts_tab, trades_tab = st.tabs(
+        [
+            "Session",
+            "Bias Calculations",
+            "Pullback Calculations",
+            "Volatility Calculations",
+            "Visualize",
+            "Alerts",
+            "Trades",
+        ]
     )
 
     with sessions_tab:
@@ -2164,6 +2172,79 @@ def sessions_page():
                 with perf_metrics_2[3]:
                     st.metric("Session ID", perf.get("session_id", "—"))
                 st.json(perf)
+
+    with trades_tab:
+        st.subheader("Trades")
+
+        with st.container(border=True):
+            st.markdown("**List Session Trades**")
+            list_cols = st.columns(4)
+            with list_cols[0]:
+                tr_session_id = st.number_input(
+                    "Session ID",
+                    min_value=1,
+                    value=1,
+                    step=1,
+                    key="tr_list_session_id",
+                )
+            with list_cols[1]:
+                tr_limit = st.number_input("Limit", min_value=1, max_value=1000, value=100, step=10, key="tr_list_limit")
+            with list_cols[2]:
+                tr_offset = st.number_input("Offset", min_value=0, value=0, step=10, key="tr_list_offset")
+            with list_cols[3]:
+                st.write("")
+                if st.button("Get Trades", use_container_width=True, key="tr_get_list"):
+                    try:
+                        trades = api_client.list_session_trades(
+                            session_id=int(tr_session_id),
+                            limit=int(tr_limit),
+                            offset=int(tr_offset),
+                        )
+                        st.session_state["trades_list"] = trades
+                        st.success(f"Loaded {len(trades)} trade(s) for session #{int(tr_session_id)}.")
+                    except APIError as e:
+                        st.error(f"Failed to list trades: {e.detail}")
+                    except Exception as e:
+                        st.error(f"Connection error: {e}")
+
+            if "trades_list" in st.session_state:
+                import pandas as pd
+
+                trades_df = pd.DataFrame(st.session_state["trades_list"])
+                for dt_col in ["created_at", "closed_at"]:
+                    if dt_col in trades_df.columns:
+                        trades_df[dt_col] = trades_df[dt_col].apply(_fmt_dt)
+
+                preferred_cols = [
+                    "id",
+                    "session_id",
+                    "alert_id",
+                    "created_at",
+                    "direction",
+                    "status",
+                    "entry_price",
+                    "take_profit_price",
+                    "stop_loss_price",
+                    "closed_at",
+                ]
+                display_cols = [c for c in preferred_cols if c in trades_df.columns] + [
+                    c for c in trades_df.columns if c not in preferred_cols
+                ]
+                st.dataframe(trades_df[display_cols], use_container_width=True, hide_index=True)
+
+        with st.container(border=True):
+            st.markdown("**Get One Trade**")
+            tr_detail_id = st.number_input("Trade ID (Get One)", min_value=1, value=1, step=1, key="tr_detail_id")
+            if st.button("Get One Trade", use_container_width=True, key="tr_get_one"):
+                try:
+                    st.session_state["trade_detail"] = api_client.get_trade(int(tr_detail_id))
+                except APIError as e:
+                    st.error(f"Failed to get trade: {e.detail}")
+                except Exception as e:
+                    st.error(f"Connection error: {e}")
+            if "trade_detail" in st.session_state:
+                st.markdown("**Trade Detail**")
+                st.json(st.session_state["trade_detail"])
 
     with sessions_tab:
         with st.container(border=True):

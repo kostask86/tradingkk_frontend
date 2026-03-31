@@ -276,6 +276,23 @@ def cancel_session_alerts(session_id: int) -> dict:
     return _handle_response(resp)
 
 
+# ── Trades ────────────────────────────────────────────────────────────
+
+def list_session_trades(session_id: int, limit: int = 100, offset: int = 0) -> list[dict]:
+    """GET /api/trades/ — list trades for a session."""
+    resp = requests.get(
+        f"{BASE_URL}/api/trades/",
+        params={"session_id": int(session_id), "limit": int(limit), "offset": int(offset)},
+    )
+    return _handle_response(resp)
+
+
+def get_trade(trade_id: int) -> dict:
+    """GET /api/trades/detail — get a single trade by id."""
+    resp = requests.get(f"{BASE_URL}/api/trades/detail", params={"trade_id": int(trade_id)})
+    return _handle_response(resp)
+
+
 # ── Provider ──────────────────────────────────────────────────────────
 
 def provider_connect(provider: str = "IBKR") -> dict:
