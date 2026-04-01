@@ -37,8 +37,8 @@ def create_session(
     swing_lookback: int = 2,
     cooldown_until: int = 5,
     trade_mode: bool = False,
-    trade_take_profit_pct: float = 1.0,
-    trade_stop_loss_pct: float = 0.5,
+    trade_take_profit_pct: float = 0.4,
+    trade_stop_loss_pct: float = 0.3,
     tp_percentage: Optional[float] = None,
     sl_percentage: Optional[float] = None,
 ) -> dict:

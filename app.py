@@ -2317,7 +2317,7 @@ def sessions_page():
             with st.form("create_session_form"):
                 col1, col2 = st.columns(2)
                 with col1:
-                    symbol = st.text_input("Symbol", value="BTCUSDT", placeholder="e.g. AAPL, EURUSD")
+                    symbol = st.text_input("Symbol", value="BTCUSD", placeholder="e.g. AAPL, EURUSD")
                     provider = st.selectbox(
                         "Provider",
                         PROVIDERS,
@@ -2334,34 +2334,34 @@ def sessions_page():
                     persistence_window = st.number_input("Persistence Window", min_value=5, value=20, step=1)
                 bottom_col1, bottom_col2 = st.columns(2)
                 with bottom_col1:
-                    persistence_threshold = st.number_input("Persistence Threshold", min_value=1, value=10, step=1)
+                    persistence_threshold = st.number_input("Persistence Threshold", min_value=1, value=12, step=1)
                 with bottom_col2:
                     swing_lookback = st.number_input("Swing Lookback", min_value=1, value=2, step=1)
-                cooldown_until = st.number_input("Cooldown Until", min_value=0, value=5, step=1)
+                cooldown_until = st.number_input("Cooldown Until", min_value=0, value=10, step=1)
 
                 trade_cols = st.columns(3)
                 with trade_cols[0]:
                     trade_mode = st.toggle("Trade Mode", value=False)
                 with trade_cols[1]:
                     trade_take_profit_pct = st.number_input(
-                        "Trade Take Profit %", min_value=0.0, value=1.0, step=0.1
+                        "Trade Take Profit %", min_value=0.0, value=0.4, step=0.1
                     )
                 with trade_cols[2]:
                     trade_stop_loss_pct = st.number_input(
-                        "Trade Stop Loss %", min_value=0.0, value=0.5, step=0.1
+                        "Trade Stop Loss %", min_value=0.0, value=0.3, step=0.1
                     )
 
                 extra_trade_cols = st.columns(2)
                 with extra_trade_cols[0]:
                     tp_percentage_raw = st.text_input(
                         "TP Percentage (optional)",
-                        value="",
+                        value="0.4",
                         placeholder="e.g. 1.2",
                     )
                 with extra_trade_cols[1]:
                     sl_percentage_raw = st.text_input(
                         "SL Percentage (optional)",
-                        value="",
+                        value="0.3",
                         placeholder="e.g. 0.8",
                     )
 
@@ -2699,7 +2699,12 @@ PROVIDER_POSITION_CATEGORIES = ["linear", "inverse", "option"]
 
 def provider_page():
     st.header("Provider Gateway")
-    selected_provider = st.selectbox("Provider", PROVIDERS, index=0, key="provider_gateway_select")
+    selected_provider = st.selectbox(
+        "Provider",
+        PROVIDERS,
+        index=PROVIDERS.index("BYBIT") if "BYBIT" in PROVIDERS else 0,
+        key="provider_gateway_select",
+    )
 
     # ── Connection controls ───────────────────────────────────────────
     st.subheader("Connection")
