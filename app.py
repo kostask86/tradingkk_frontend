@@ -2310,6 +2310,13 @@ def sessions_page():
                     st.metric("tp_percentage", metadata.get("tp_percentage", "—"))
                 with md_cols_4[1]:
                     st.metric("sl_percentage", metadata.get("sl_percentage", "—"))
+                md_cols_5 = st.columns(3)
+                with md_cols_5[0]:
+                    st.metric("trade_auto_prealert", metadata.get("trade_auto_prealert", "—"))
+                with md_cols_5[1]:
+                    st.metric("trade_auto_trigger", metadata.get("trade_auto_trigger", "—"))
+                with md_cols_5[2]:
+                    st.metric("trade_auto_trend_strength", metadata.get("trade_auto_trend_strength", "—"))
                 st.json(metadata)
 
         # ── Create session form ───────────────────────────────────────
@@ -2364,6 +2371,13 @@ def sessions_page():
                         value="0.3",
                         placeholder="e.g. 0.8",
                     )
+                auto_trade_cols = st.columns(3)
+                with auto_trade_cols[0]:
+                    trade_auto_prealert = st.toggle("Auto Trade PREALERT", value=False)
+                with auto_trade_cols[1]:
+                    trade_auto_trigger = st.toggle("Auto Trade TRIGGER", value=False)
+                with auto_trade_cols[2]:
+                    trade_auto_trend_strength = st.toggle("Auto Trade TREND STRENGTH", value=False)
 
                 submitted = st.form_submit_button("Create Session", use_container_width=True)
                 if submitted:
@@ -2392,6 +2406,9 @@ def sessions_page():
                                 swing_lookback=int(swing_lookback),
                                 cooldown_until=int(cooldown_until),
                                 trade_mode=bool(trade_mode),
+                                trade_auto_prealert=bool(trade_auto_prealert),
+                                trade_auto_trigger=bool(trade_auto_trigger),
+                                trade_auto_trend_strength=bool(trade_auto_trend_strength),
                                 trade_take_profit_pct=float(trade_take_profit_pct),
                                 trade_stop_loss_pct=float(trade_stop_loss_pct),
                                 tp_percentage=tp_percentage,
@@ -2541,7 +2558,17 @@ def sessions_page():
                 with trade_info_cols[4]:
                     st.caption(f"SL Percentage: **{sess.get('sl_percentage', '—')}**")
 
-                trade_toggle_cols = st.columns([1, 1, 3])
+                auto_trade_info_cols = st.columns(3)
+                with auto_trade_info_cols[0]:
+                    st.caption(f"Auto PREALERT: **{'ON' if bool(sess.get('trade_auto_prealert', False)) else 'OFF'}**")
+                with auto_trade_info_cols[1]:
+                    st.caption(f"Auto TRIGGER: **{'ON' if bool(sess.get('trade_auto_trigger', False)) else 'OFF'}**")
+                with auto_trade_info_cols[2]:
+                    st.caption(
+                        f"Auto TREND STRENGTH: **{'ON' if bool(sess.get('trade_auto_trend_strength', False)) else 'OFF'}**"
+                    )
+
+                trade_toggle_cols = st.columns([1, 1, 1, 1, 1.5])
                 with trade_toggle_cols[0]:
                     _trade_mode_ui = st.toggle(
                         "Trade Mode",
@@ -2549,16 +2576,40 @@ def sessions_page():
                         key=f"trade_mode_toggle_{sid}",
                     )
                 with trade_toggle_cols[1]:
+                    _trade_auto_prealert_ui = st.toggle(
+                        "Auto PREALERT",
+                        value=bool(sess.get("trade_auto_prealert", False)),
+                        key=f"trade_auto_prealert_toggle_{sid}",
+                    )
+                with trade_toggle_cols[2]:
+                    _trade_auto_trigger_ui = st.toggle(
+                        "Auto TRIGGER",
+                        value=bool(sess.get("trade_auto_trigger", False)),
+                        key=f"trade_auto_trigger_toggle_{sid}",
+                    )
+                with trade_toggle_cols[3]:
+                    _trade_auto_trend_strength_ui = st.toggle(
+                        "Auto TREND",
+                        value=bool(sess.get("trade_auto_trend_strength", False)),
+                        key=f"trade_auto_trend_strength_toggle_{sid}",
+                    )
+                with trade_toggle_cols[4]:
                     if st.button("Update", key=f"trade_mode_update_{sid}", use_container_width=True):
                         try:
-                            api_client.update_session(sid, trade_mode=bool(_trade_mode_ui))
+                            api_client.update_session(
+                                sid,
+                                trade_mode=bool(_trade_mode_ui),
+                                trade_auto_prealert=bool(_trade_auto_prealert_ui),
+                                trade_auto_trigger=bool(_trade_auto_trigger_ui),
+                                trade_auto_trend_strength=bool(_trade_auto_trend_strength_ui),
+                            )
                             st.success(
-                                f"Session #{sid} trade mode set to "
-                                f"{'ON' if bool(_trade_mode_ui) else 'OFF'}."
+                                f"Session #{sid} trade switches updated "
+                                f"(mode: {'ON' if bool(_trade_mode_ui) else 'OFF'})."
                             )
                             st.rerun()
                         except APIError as e:
-                            st.error(f"Failed to update trade mode: {e.detail}")
+                            st.error(f"Failed to update trade switches: {e.detail}")
                         except Exception as e:
                             st.error(f"Connection error: {e}")
 
@@ -2667,6 +2718,25 @@ def sessions_page():
                             new_cooldown = st.number_input(
                                 "Cooldown Until", min_value=0, value=sess.get("cooldown_until", 5), key=f"cooldown_{sid}"
                             )
+                        auto_trade_edit_cols = st.columns(3)
+                        with auto_trade_edit_cols[0]:
+                            new_trade_auto_prealert = st.toggle(
+                                "Auto Trade PREALERT",
+                                value=bool(sess.get("trade_auto_prealert", False)),
+                                key=f"trade_auto_prealert_{sid}",
+                            )
+                        with auto_trade_edit_cols[1]:
+                            new_trade_auto_trigger = st.toggle(
+                                "Auto Trade TRIGGER",
+                                value=bool(sess.get("trade_auto_trigger", False)),
+                                key=f"trade_auto_trigger_{sid}",
+                            )
+                        with auto_trade_edit_cols[2]:
+                            new_trade_auto_trend_strength = st.toggle(
+                                "Auto Trade TREND STRENGTH",
+                                value=bool(sess.get("trade_auto_trend_strength", False)),
+                                key=f"trade_auto_trend_strength_{sid}",
+                            )
                         save_cols = st.columns(2)
                         with save_cols[0]:
                             if st.form_submit_button("Save", use_container_width=True):
@@ -2681,6 +2751,9 @@ def sessions_page():
                                         persistence_threshold=int(new_pt),
                                         swing_lookback=int(new_sl),
                                         cooldown_until=int(new_cooldown),
+                                        trade_auto_prealert=bool(new_trade_auto_prealert),
+                                        trade_auto_trigger=bool(new_trade_auto_trigger),
+                                        trade_auto_trend_strength=bool(new_trade_auto_trend_strength),
                                     )
                                     st.session_state.pop(f"editing_{sid}", None)
                                     st.rerun()
