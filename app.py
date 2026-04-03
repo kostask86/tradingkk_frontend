@@ -2301,21 +2301,16 @@ def sessions_page():
                 with md_cols_3[1]:
                     st.metric("trade_mode", metadata.get("trade_mode", "—"))
                 with md_cols_3[2]:
-                    st.metric("trade_take_profit_pct", metadata.get("trade_take_profit_pct", "—"))
+                    st.metric("Take Profit %", metadata.get("tp_percentage", "—"))
                 with md_cols_3[3]:
-                    st.metric("trade_stop_loss_pct", metadata.get("trade_stop_loss_pct", "—"))
+                    st.metric("Stop Loss %", metadata.get("sl_percentage", "—"))
 
-                md_cols_4 = st.columns(2)
+                md_cols_4 = st.columns(3)
                 with md_cols_4[0]:
-                    st.metric("tp_percentage", metadata.get("tp_percentage", "—"))
-                with md_cols_4[1]:
-                    st.metric("sl_percentage", metadata.get("sl_percentage", "—"))
-                md_cols_5 = st.columns(3)
-                with md_cols_5[0]:
                     st.metric("trade_auto_prealert", metadata.get("trade_auto_prealert", "—"))
-                with md_cols_5[1]:
+                with md_cols_4[1]:
                     st.metric("trade_auto_trigger", metadata.get("trade_auto_trigger", "—"))
-                with md_cols_5[2]:
+                with md_cols_4[2]:
                     st.metric("trade_auto_trend_strength", metadata.get("trade_auto_trend_strength", "—"))
                 st.json(metadata)
 
@@ -2350,27 +2345,14 @@ def sessions_page():
                 with trade_cols[0]:
                     trade_mode = st.toggle("Trade Mode", value=False)
                 with trade_cols[1]:
-                    trade_take_profit_pct = st.number_input(
-                        "Trade Take Profit %", min_value=0.0, value=0.4, step=0.1
+                    tp_percentage = st.number_input(
+                        "Take Profit %", min_value=0.0, value=0.4, step=0.1
                     )
                 with trade_cols[2]:
-                    trade_stop_loss_pct = st.number_input(
-                        "Trade Stop Loss %", min_value=0.0, value=0.3, step=0.1
+                    sl_percentage = st.number_input(
+                        "Stop Loss %", min_value=0.0, value=0.3, step=0.1
                     )
 
-                extra_trade_cols = st.columns(2)
-                with extra_trade_cols[0]:
-                    tp_percentage_raw = st.text_input(
-                        "TP Percentage (optional)",
-                        value="0.4",
-                        placeholder="e.g. 1.2",
-                    )
-                with extra_trade_cols[1]:
-                    sl_percentage_raw = st.text_input(
-                        "SL Percentage (optional)",
-                        value="0.3",
-                        placeholder="e.g. 0.8",
-                    )
                 auto_trade_cols = st.columns(3)
                 with auto_trade_cols[0]:
                     trade_auto_prealert = st.toggle("Auto Trade PREALERT", value=False)
@@ -2385,16 +2367,6 @@ def sessions_page():
                         st.error("Symbol is required.")
                     else:
                         try:
-                            tp_percentage = (
-                                float(tp_percentage_raw.strip())
-                                if isinstance(tp_percentage_raw, str) and tp_percentage_raw.strip()
-                                else None
-                            )
-                            sl_percentage = (
-                                float(sl_percentage_raw.strip())
-                                if isinstance(sl_percentage_raw, str) and sl_percentage_raw.strip()
-                                else None
-                            )
                             new_session = api_client.create_session(
                                 symbol=symbol,
                                 provider=provider,
@@ -2409,15 +2381,11 @@ def sessions_page():
                                 trade_auto_prealert=bool(trade_auto_prealert),
                                 trade_auto_trigger=bool(trade_auto_trigger),
                                 trade_auto_trend_strength=bool(trade_auto_trend_strength),
-                                trade_take_profit_pct=float(trade_take_profit_pct),
-                                trade_stop_loss_pct=float(trade_stop_loss_pct),
-                                tp_percentage=tp_percentage,
-                                sl_percentage=sl_percentage,
+                                tp_percentage=float(tp_percentage),
+                                sl_percentage=float(sl_percentage),
                             )
                             st.success(f"Session **#{new_session['id']}** created for **{new_session['symbol']}**")
                             st.rerun()
-                        except ValueError:
-                            st.error("TP/SL Percentage must be numeric when provided.")
                         except APIError as e:
                             st.error(f"Failed to create session: {e.detail}")
                         except Exception as e:
@@ -2542,7 +2510,7 @@ def sessions_page():
                 st.caption(f"Last Alert At: **{_fmt_dt(sess.get('last_alert_at'))}**")
 
                 # Trade controls (optional fields added to SessionRead)
-                trade_info_cols = st.columns(5)
+                trade_info_cols = st.columns(3)
                 with trade_info_cols[0]:
                     _tm = sess.get("trade_mode")
                     if _tm is None:
@@ -2550,13 +2518,9 @@ def sessions_page():
                     else:
                         st.caption(f"Trade Mode: **{'ON' if bool(_tm) else 'OFF'}**")
                 with trade_info_cols[1]:
-                    st.caption(f"Take Profit %: **{sess.get('trade_take_profit_pct', '—')}**")
+                    st.caption(f"Take Profit %: **{sess.get('tp_percentage', '—')}**")
                 with trade_info_cols[2]:
-                    st.caption(f"Stop Loss %: **{sess.get('trade_stop_loss_pct', '—')}**")
-                with trade_info_cols[3]:
-                    st.caption(f"TP Percentage: **{sess.get('tp_percentage', '—')}**")
-                with trade_info_cols[4]:
-                    st.caption(f"SL Percentage: **{sess.get('sl_percentage', '—')}**")
+                    st.caption(f"Stop Loss %: **{sess.get('sl_percentage', '—')}**")
 
                 auto_trade_info_cols = st.columns(3)
                 with auto_trade_info_cols[0]:
@@ -2737,6 +2701,22 @@ def sessions_page():
                                 value=bool(sess.get("trade_auto_trend_strength", False)),
                                 key=f"trade_auto_trend_strength_{sid}",
                             )
+                        _tp_cur = sess.get("tp_percentage")
+                        _sl_cur = sess.get("sl_percentage")
+                        new_tp_pct = st.number_input(
+                            "Take Profit %",
+                            min_value=0.0,
+                            value=float(_tp_cur) if _tp_cur is not None else 0.4,
+                            step=0.1,
+                            key=f"tp_pct_{sid}",
+                        )
+                        new_sl_pct = st.number_input(
+                            "Stop Loss %",
+                            min_value=0.0,
+                            value=float(_sl_cur) if _sl_cur is not None else 0.3,
+                            step=0.1,
+                            key=f"sl_pct_{sid}",
+                        )
                         save_cols = st.columns(2)
                         with save_cols[0]:
                             if st.form_submit_button("Save", use_container_width=True):
@@ -2754,6 +2734,8 @@ def sessions_page():
                                         trade_auto_prealert=bool(new_trade_auto_prealert),
                                         trade_auto_trigger=bool(new_trade_auto_trigger),
                                         trade_auto_trend_strength=bool(new_trade_auto_trend_strength),
+                                        tp_percentage=float(new_tp_pct),
+                                        sl_percentage=float(new_sl_pct),
                                     )
                                     st.session_state.pop(f"editing_{sid}", None)
                                     st.rerun()

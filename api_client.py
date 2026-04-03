@@ -40,8 +40,6 @@ def create_session(
     trade_auto_prealert: bool = False,
     trade_auto_trigger: bool = False,
     trade_auto_trend_strength: bool = False,
-    trade_take_profit_pct: float = 0.4,
-    trade_stop_loss_pct: float = 0.3,
     tp_percentage: Optional[float] = None,
     sl_percentage: Optional[float] = None,
 ) -> dict:
@@ -59,8 +57,6 @@ def create_session(
         "trade_auto_prealert": bool(trade_auto_prealert),
         "trade_auto_trigger": bool(trade_auto_trigger),
         "trade_auto_trend_strength": bool(trade_auto_trend_strength),
-        "trade_take_profit_pct": float(trade_take_profit_pct),
-        "trade_stop_loss_pct": float(trade_stop_loss_pct),
     }
     if tp_percentage is not None:
         payload["tp_percentage"] = float(tp_percentage)
