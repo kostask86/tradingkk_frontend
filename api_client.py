@@ -57,11 +57,10 @@ def create_session(
         "trade_auto_prealert": bool(trade_auto_prealert),
         "trade_auto_trigger": bool(trade_auto_trigger),
         "trade_auto_trend_strength": bool(trade_auto_trend_strength),
+        # Nullable on the session model: send explicit null when omitted so the backend can persist NULL.
+        "tp_percentage": None if tp_percentage is None else float(tp_percentage),
+        "sl_percentage": None if sl_percentage is None else float(sl_percentage),
     }
-    if tp_percentage is not None:
-        payload["tp_percentage"] = float(tp_percentage)
-    if sl_percentage is not None:
-        payload["sl_percentage"] = float(sl_percentage)
     resp = requests.post(f"{BASE_URL}/api/sessions/", json=payload)
     return _handle_response(resp, 201)
 

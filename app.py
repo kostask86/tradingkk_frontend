@@ -2345,12 +2345,18 @@ def sessions_page():
                 with trade_cols[0]:
                     trade_mode = st.toggle("Trade Mode", value=False)
                 with trade_cols[1]:
-                    tp_percentage = st.number_input(
-                        "Take Profit %", min_value=0.0, value=0.4, step=0.1
+                    tp_percentage_raw = st.text_input(
+                        "Take Profit % (optional)",
+                        value="",
+                        placeholder="e.g. 0.4 — leave empty for none",
+                        key="create_session_tp_percentage",
                     )
                 with trade_cols[2]:
-                    sl_percentage = st.number_input(
-                        "Stop Loss %", min_value=0.0, value=0.3, step=0.1
+                    sl_percentage_raw = st.text_input(
+                        "Stop Loss % (optional)",
+                        value="",
+                        placeholder="e.g. 0.3 — leave empty for none",
+                        key="create_session_sl_percentage",
                     )
 
                 auto_trade_cols = st.columns(3)
@@ -2367,6 +2373,16 @@ def sessions_page():
                         st.error("Symbol is required.")
                     else:
                         try:
+                            tp_percentage = (
+                                float(str(tp_percentage_raw).strip())
+                                if isinstance(tp_percentage_raw, str) and str(tp_percentage_raw).strip()
+                                else None
+                            )
+                            sl_percentage = (
+                                float(str(sl_percentage_raw).strip())
+                                if isinstance(sl_percentage_raw, str) and str(sl_percentage_raw).strip()
+                                else None
+                            )
                             new_session = api_client.create_session(
                                 symbol=symbol,
                                 provider=provider,
@@ -2381,11 +2397,13 @@ def sessions_page():
                                 trade_auto_prealert=bool(trade_auto_prealert),
                                 trade_auto_trigger=bool(trade_auto_trigger),
                                 trade_auto_trend_strength=bool(trade_auto_trend_strength),
-                                tp_percentage=float(tp_percentage),
-                                sl_percentage=float(sl_percentage),
+                                tp_percentage=tp_percentage,
+                                sl_percentage=sl_percentage,
                             )
                             st.success(f"Session **#{new_session['id']}** created for **{new_session['symbol']}**")
                             st.rerun()
+                        except ValueError:
+                            st.error("Take Profit % and Stop Loss % must be numeric when provided (or leave empty for none).")
                         except APIError as e:
                             st.error(f"Failed to create session: {e.detail}")
                         except Exception as e:
