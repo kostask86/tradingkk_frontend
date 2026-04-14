@@ -4705,18 +4705,21 @@ def trading_control_panel_page():
             """,
                 unsafe_allow_html=True,
             )
-            st.markdown(
-                f"""
-            <div class="tcp-panel">
-                <div class="tcp-panel-label">BREAKOUT STATUS</div>
-                <div style="height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.35rem;">
-                    <div style="font-size:0.78rem;font-weight:700;letter-spacing:0.06em;color:#cfd8e3;">STATE: {breakout_state}</div>
-                    <div style="font-size:0.76rem;font-weight:700;letter-spacing:0.06em;color:{breakout_dir_color};">DIRECTION: {breakout_direction}</div>
-                </div>
+
+    breakout_row_left, breakout_row_mid, breakout_row_right = st.columns([3, 2, 3])
+    with breakout_row_mid:
+        st.markdown(
+            f"""
+        <div class="tcp-panel">
+            <div class="tcp-panel-label">BREAKOUT STATUS</div>
+            <div style="height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.35rem;">
+                <div style="font-size:0.78rem;font-weight:700;letter-spacing:0.06em;color:#cfd8e3;">STATE: {breakout_state}</div>
+                <div style="font-size:0.76rem;font-weight:700;letter-spacing:0.06em;color:{breakout_dir_color};">DIRECTION: {breakout_direction}</div>
             </div>
-            """,
-                unsafe_allow_html=True,
-            )
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
 
     with st.container(border=True):
         st.caption("Quick Controls")
