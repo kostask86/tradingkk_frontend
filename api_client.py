@@ -40,6 +40,7 @@ def create_session(
     trade_auto_prealert: bool = False,
     trade_auto_trigger: bool = False,
     trade_auto_trend_strength: bool = False,
+    trade_auto_breakout: bool = False,
     tp_percentage: Optional[float] = None,
     sl_percentage: Optional[float] = None,
 ) -> dict:
@@ -57,6 +58,7 @@ def create_session(
         "trade_auto_prealert": bool(trade_auto_prealert),
         "trade_auto_trigger": bool(trade_auto_trigger),
         "trade_auto_trend_strength": bool(trade_auto_trend_strength),
+        "trade_auto_breakout": bool(trade_auto_breakout),
         # Nullable on the session model: send explicit null when omitted so the backend can persist NULL.
         "tp_percentage": None if tp_percentage is None else float(tp_percentage),
         "sl_percentage": None if sl_percentage is None else float(sl_percentage),
@@ -188,6 +190,24 @@ def get_pullback_calculation(pullback_calculation_id: int) -> dict:
 def list_pullback_calculations(session_id: int, limit: int = 100, offset: int = 0) -> list[dict]:
     resp = requests.get(
         f"{BASE_URL}/api/pullback-calculations/",
+        params={"session_id": session_id, "limit": limit, "offset": offset},
+    )
+    return _handle_response(resp)
+
+
+# ── Breakout Calculations ────────────────────────────────────────────
+
+def get_breakout_calculation(breakout_calculation_id: int) -> dict:
+    resp = requests.get(
+        f"{BASE_URL}/api/breakout-calculations/detail",
+        params={"breakout_calculation_id": breakout_calculation_id},
+    )
+    return _handle_response(resp)
+
+
+def list_breakout_calculations(session_id: int, limit: int = 100, offset: int = 0) -> list[dict]:
+    resp = requests.get(
+        f"{BASE_URL}/api/breakout-calculations/",
         params={"session_id": session_id, "limit": limit, "offset": offset},
     )
     return _handle_response(resp)

@@ -13,7 +13,7 @@ TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h"]
 PROVIDERS = ["IBKR", "BYBIT"]
 ALERT_STATUSES = ["OPEN", "TP_HIT", "SL_HIT", "CANCELED"]
 ALERT_DIRECTIONS = ["LONG", "SHORT"]
-ALERT_TYPES = ["PREALERT", "TRIGGER_ALERT", "TREND_STRENGTH_ALERT"]
+ALERT_TYPES = ["PREALERT", "TRIGGER_ALERT", "TREND_STRENGTH_ALERT", "BREAKOUT"]
 STATUS_COLORS = {
     "ACTIVE": "🟢",
     "PAUSED": "🟡",
@@ -1106,11 +1106,12 @@ with st.sidebar:
 
 def sessions_page():
     st.header("Session")
-    sessions_tab, bias_tab, pullback_tab, volatility_tab, visualize_tab, alerts_tab, trades_tab = st.tabs(
+    sessions_tab, bias_tab, pullback_tab, breakout_tab, volatility_tab, visualize_tab, alerts_tab, trades_tab = st.tabs(
         [
             "Session",
             "Bias Calculations",
             "Pullback Calculations",
+            "Breakout Calculations",
             "Volatility Calculations",
             "Visualize",
             "Alerts",
@@ -1350,6 +1351,71 @@ def sessions_page():
                     st.metric("Pullback Direction", detail.get("pullback_direction", "NONE"))
                 with top_cols[3]:
                     st.metric("Trigger Alert", "Yes" if detail.get("trigger_alert") else "No")
+                st.caption(f"Reset Reason: **{detail.get('reset_reason', '—')}**")
+                st.json(detail)
+
+    with breakout_tab:
+        st.subheader("Breakout Calculations")
+        list_cols = st.columns(4)
+        with list_cols[0]:
+            boc_session_id = st.number_input("Session ID", min_value=1, value=1, step=1, key="boc_session_id")
+        with list_cols[1]:
+            boc_limit = st.number_input("Limit", min_value=1, max_value=1000, value=100, step=10, key="boc_limit")
+        with list_cols[2]:
+            boc_offset = st.number_input("Offset", min_value=0, value=0, step=10, key="boc_offset")
+        with list_cols[3]:
+            st.write("")
+            if st.button("Get By Session", use_container_width=True, key="boc_get_all"):
+                try:
+                    session_breakouts = api_client.list_breakout_calculations(
+                        session_id=int(boc_session_id),
+                        limit=int(boc_limit),
+                        offset=int(boc_offset),
+                    )
+                    st.session_state["breakout_calculations_list"] = session_breakouts
+                    st.success(
+                        f"Loaded {len(session_breakouts)} breakout calculation(s) for session #{int(boc_session_id)}."
+                    )
+                except APIError as e:
+                    st.error(f"Failed to list breakout calculations: {e.detail}")
+                except Exception as e:
+                    st.error(f"Connection error: {e}")
+
+        boc_detail_id = st.number_input(
+            "Breakout Calculation ID (Get One)", min_value=1, value=1, step=1, key="boc_detail_id"
+        )
+        if st.button("Get One", use_container_width=True, key="boc_get_one"):
+            try:
+                st.session_state["breakout_calculation_detail"] = api_client.get_breakout_calculation(int(boc_detail_id))
+            except APIError as e:
+                st.error(f"Failed to get breakout calculation: {e.detail}")
+            except Exception as e:
+                st.error(f"Connection error: {e}")
+
+        if "breakout_calculations_list" in st.session_state:
+            with st.container(border=True):
+                st.markdown("**Session Breakout Calculations**")
+                import pandas as pd
+
+                df = pd.DataFrame(st.session_state["breakout_calculations_list"])
+                for dt_col in ["calculated_at", "created_at", "updated_at"]:
+                    if dt_col in df.columns:
+                        df[dt_col] = df[dt_col].apply(_fmt_dt)
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+        if "breakout_calculation_detail" in st.session_state:
+            detail = st.session_state["breakout_calculation_detail"]
+            with st.container(border=True):
+                st.markdown("**Breakout Calculation Detail**")
+                top_cols = st.columns(4)
+                with top_cols[0]:
+                    st.metric("State", detail.get("breakout_state", "NONE"))
+                with top_cols[1]:
+                    st.metric("Direction", detail.get("setup_direction", "—"))
+                with top_cols[2]:
+                    st.metric("Breakout Level", detail.get("breakout_level", "—"))
+                with top_cols[3]:
+                    st.metric("Alert Emitted", "Yes" if detail.get("alert_emitted") else "No")
                 st.caption(f"Reset Reason: **{detail.get('reset_reason', '—')}**")
                 st.json(detail)
 
@@ -1855,6 +1921,34 @@ def sessions_page():
                     st.caption(f"Reset Reason: **{latest_pullback.get('reset_reason', '—')}**")
                     st.json(latest_pullback)
 
+                # Breakout status panel.
+                st.markdown("### Breakout")
+                bo_cols = st.columns(4)
+                with bo_cols[0]:
+                    st.metric("Breakout State", session.get("breakout_state", "NONE"))
+                with bo_cols[1]:
+                    st.metric("Direction", session.get("breakout_setup_direction", "—"))
+                with bo_cols[2]:
+                    st.metric("Breakout Level", session.get("breakout_level", "—"))
+                with bo_cols[3]:
+                    st.metric("Breakout Q.", int(session.get("breakout_quality", 0) or 0))
+                latest_breakout = data.get("latest_breakout_calculation")
+                if latest_breakout:
+                    st.markdown("**Latest Breakout Calculation**")
+                    lbc_cols = st.columns(4)
+                    with lbc_cols[0]:
+                        st.metric("State", latest_breakout.get("breakout_state", "NONE"))
+                    with lbc_cols[1]:
+                        st.metric("Direction", latest_breakout.get("setup_direction", "—"))
+                    with lbc_cols[2]:
+                        st.metric("Breakout Level", latest_breakout.get("breakout_level", "—"))
+                    with lbc_cols[3]:
+                        st.metric("Alert Emitted", "Yes" if latest_breakout.get("alert_emitted") else "No")
+                    st.caption(f"Reset Reason: **{latest_breakout.get('reset_reason', '—')}**")
+                    st.json(latest_breakout)
+                else:
+                    st.info("No latest breakout calculation available.")
+
                 # Volatility panel.
                 st.markdown("### Volatility")
                 latest_volatility = data.get("latest_volatility_calculation")
@@ -2291,27 +2385,36 @@ def sessions_page():
                         metadata.get("risky_alert_range_threshold_pct", "—"),
                     )
                 with md_cols_2[2]:
-                    st.metric("persistence_threshold", metadata.get("persistence_threshold", "—"))
+                    st.metric("breakout_buffer_atr_k", metadata.get("breakout_buffer_atr_k", "—"))
                 with md_cols_2[3]:
-                    st.metric("strength_threshold", metadata.get("strength_threshold", "—"))
+                    st.metric("retest_band_atr_k", metadata.get("retest_band_atr_k", "—"))
 
                 md_cols_3 = st.columns(4)
                 with md_cols_3[0]:
-                    st.metric("cooldown_until", metadata.get("cooldown_until", "—"))
+                    st.metric("stop_buffer_atr_k", metadata.get("stop_buffer_atr_k", "—"))
                 with md_cols_3[1]:
-                    st.metric("trade_mode", metadata.get("trade_mode", "—"))
+                    st.metric("persistence_threshold", metadata.get("persistence_threshold", "—"))
                 with md_cols_3[2]:
-                    st.metric("Take Profit %", metadata.get("tp_percentage", "—"))
+                    st.metric("strength_threshold", metadata.get("strength_threshold", "—"))
                 with md_cols_3[3]:
-                    st.metric("Stop Loss %", metadata.get("sl_percentage", "—"))
+                    st.metric("cooldown_until", metadata.get("cooldown_until", "—"))
 
-                md_cols_4 = st.columns(3)
+                md_cols_4 = st.columns(4)
                 with md_cols_4[0]:
-                    st.metric("trade_auto_prealert", metadata.get("trade_auto_prealert", "—"))
+                    st.metric("trade_mode", metadata.get("trade_mode", "—"))
                 with md_cols_4[1]:
-                    st.metric("trade_auto_trigger", metadata.get("trade_auto_trigger", "—"))
+                    st.metric("trade_auto_prealert", metadata.get("trade_auto_prealert", "—"))
                 with md_cols_4[2]:
+                    st.metric("trade_auto_trigger", metadata.get("trade_auto_trigger", "—"))
+                with md_cols_4[3]:
                     st.metric("trade_auto_trend_strength", metadata.get("trade_auto_trend_strength", "—"))
+                md_cols_5 = st.columns(3)
+                with md_cols_5[0]:
+                    st.metric("trade_auto_breakout", metadata.get("trade_auto_breakout", "—"))
+                with md_cols_5[1]:
+                    st.metric("Take Profit %", metadata.get("tp_percentage", "—"))
+                with md_cols_5[2]:
+                    st.metric("Stop Loss %", metadata.get("sl_percentage", "—"))
                 st.json(metadata)
 
         # ── Create session form ───────────────────────────────────────
@@ -2359,13 +2462,15 @@ def sessions_page():
                         key="create_session_sl_percentage",
                     )
 
-                auto_trade_cols = st.columns(3)
+                auto_trade_cols = st.columns(4)
                 with auto_trade_cols[0]:
                     trade_auto_prealert = st.toggle("Auto Trade PREALERT", value=False)
                 with auto_trade_cols[1]:
                     trade_auto_trigger = st.toggle("Auto Trade TRIGGER", value=False)
                 with auto_trade_cols[2]:
                     trade_auto_trend_strength = st.toggle("Auto Trade TREND STRENGTH", value=False)
+                with auto_trade_cols[3]:
+                    trade_auto_breakout = st.toggle("Auto Trade BREAKOUT", value=False)
 
                 submitted = st.form_submit_button("Create Session", use_container_width=True)
                 if submitted:
@@ -2397,6 +2502,7 @@ def sessions_page():
                                 trade_auto_prealert=bool(trade_auto_prealert),
                                 trade_auto_trigger=bool(trade_auto_trigger),
                                 trade_auto_trend_strength=bool(trade_auto_trend_strength),
+                                trade_auto_breakout=bool(trade_auto_breakout),
                                 tp_percentage=tp_percentage,
                                 sl_percentage=sl_percentage,
                             )
@@ -2526,6 +2632,15 @@ def sessions_page():
                     st.caption(f"PB Start At: **{_fmt_dt(sess.get('pb_start_at'))}**")
 
                 st.caption(f"Last Alert At: **{_fmt_dt(sess.get('last_alert_at'))}**")
+                breakout_cols = st.columns(4)
+                with breakout_cols[0]:
+                    st.caption(f"Breakout State: **{sess.get('breakout_state', 'NONE')}**")
+                with breakout_cols[1]:
+                    st.caption(f"Breakout Direction: **{sess.get('breakout_setup_direction', '—')}**")
+                with breakout_cols[2]:
+                    st.caption(f"Breakout Level: **{sess.get('breakout_level', '—')}**")
+                with breakout_cols[3]:
+                    st.caption(f"Breakout Quality: **{int(sess.get('breakout_quality', 0) or 0)}**")
 
                 # Trade controls (optional fields added to SessionRead)
                 trade_info_cols = st.columns(3)
@@ -2540,7 +2655,7 @@ def sessions_page():
                 with trade_info_cols[2]:
                     st.caption(f"Stop Loss %: **{sess.get('sl_percentage', '—')}**")
 
-                auto_trade_info_cols = st.columns(3)
+                auto_trade_info_cols = st.columns(4)
                 with auto_trade_info_cols[0]:
                     st.caption(f"Auto PREALERT: **{'ON' if bool(sess.get('trade_auto_prealert', False)) else 'OFF'}**")
                 with auto_trade_info_cols[1]:
@@ -2549,8 +2664,10 @@ def sessions_page():
                     st.caption(
                         f"Auto TREND STRENGTH: **{'ON' if bool(sess.get('trade_auto_trend_strength', False)) else 'OFF'}**"
                     )
+                with auto_trade_info_cols[3]:
+                    st.caption(f"Auto BREAKOUT: **{'ON' if bool(sess.get('trade_auto_breakout', False)) else 'OFF'}**")
 
-                trade_toggle_cols = st.columns([1, 1, 1, 1, 1.5])
+                trade_toggle_cols = st.columns([1, 1, 1, 1, 1, 1.2])
                 with trade_toggle_cols[0]:
                     _trade_mode_ui = st.toggle(
                         "Trade Mode",
@@ -2576,6 +2693,12 @@ def sessions_page():
                         key=f"trade_auto_trend_strength_toggle_{sid}",
                     )
                 with trade_toggle_cols[4]:
+                    _trade_auto_breakout_ui = st.toggle(
+                        "Auto BREAKOUT",
+                        value=bool(sess.get("trade_auto_breakout", False)),
+                        key=f"trade_auto_breakout_toggle_{sid}",
+                    )
+                with trade_toggle_cols[5]:
                     if st.button("Update", key=f"trade_mode_update_{sid}", use_container_width=True):
                         try:
                             api_client.update_session(
@@ -2584,6 +2707,7 @@ def sessions_page():
                                 trade_auto_prealert=bool(_trade_auto_prealert_ui),
                                 trade_auto_trigger=bool(_trade_auto_trigger_ui),
                                 trade_auto_trend_strength=bool(_trade_auto_trend_strength_ui),
+                                trade_auto_breakout=bool(_trade_auto_breakout_ui),
                             )
                             st.success(
                                 f"Session #{sid} trade switches updated "
@@ -2700,7 +2824,7 @@ def sessions_page():
                             new_cooldown = st.number_input(
                                 "Cooldown Until", min_value=0, value=sess.get("cooldown_until", 5), key=f"cooldown_{sid}"
                             )
-                        auto_trade_edit_cols = st.columns(3)
+                        auto_trade_edit_cols = st.columns(4)
                         with auto_trade_edit_cols[0]:
                             new_trade_auto_prealert = st.toggle(
                                 "Auto Trade PREALERT",
@@ -2718,6 +2842,12 @@ def sessions_page():
                                 "Auto Trade TREND STRENGTH",
                                 value=bool(sess.get("trade_auto_trend_strength", False)),
                                 key=f"trade_auto_trend_strength_{sid}",
+                            )
+                        with auto_trade_edit_cols[3]:
+                            new_trade_auto_breakout = st.toggle(
+                                "Auto Trade BREAKOUT",
+                                value=bool(sess.get("trade_auto_breakout", False)),
+                                key=f"trade_auto_breakout_{sid}",
                             )
                         _tp_cur = sess.get("tp_percentage")
                         _sl_cur = sess.get("sl_percentage")
@@ -2752,6 +2882,7 @@ def sessions_page():
                                         trade_auto_prealert=bool(new_trade_auto_prealert),
                                         trade_auto_trigger=bool(new_trade_auto_trigger),
                                         trade_auto_trend_strength=bool(new_trade_auto_trend_strength),
+                                        trade_auto_breakout=bool(new_trade_auto_breakout),
                                         tp_percentage=float(new_tp_pct),
                                         sl_percentage=float(new_sl_pct),
                                     )
