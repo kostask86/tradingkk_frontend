@@ -3936,8 +3936,8 @@ def _show_trading_rules_dialog():
 
 
 def _tcp_session_quality_scores(panel_data: object, session_detail: object) -> dict:
-    """Resolve bias/structure/pullback/volatility scores for the TCP session knob."""
-    keys = ("bias_strength", "structure_quality", "pullback_quality", "volatility_fitness")
+    """Resolve quality scores for the TCP session radar."""
+    keys = ("bias_strength", "structure_quality", "pullback_quality", "breakout_quality", "volatility_fitness")
     panel = panel_data if isinstance(panel_data, dict) else {}
     nested = panel.get("session") if isinstance(panel.get("session"), dict) else {}
     sd = session_detail if isinstance(session_detail, dict) else {}
@@ -3956,9 +3956,10 @@ def _build_alert_radar_figure(
     bias_strength: object,
     structure_quality: object,
     pullback_quality: object,
+    breakout_quality: object,
     volatility_fitness: object,
 ):
-    """Polar radar (0–100): top=Structure, right=Bias, bottom=Volatility, left=Pullback."""
+    """Polar radar (0–100): structure, bias, breakout, volatility, pullback."""
     import matplotlib
 
     try:
@@ -3984,14 +3985,16 @@ def _build_alert_radar_figure(
         except (TypeError, ValueError):
             return 0.0
 
-    # Order matches reference: clockwise from top — Structure, Bias, Volatility, Pullback
+    # Clockwise from top: Structure, Bias, Breakout, Volatility, Pullback
     s = _f(structure_quality)
     b = _f(bias_strength)
+    bo = _f(breakout_quality)
     v = _f(volatility_fitness)
     p = _f(pullback_quality)
 
-    theta = np.array([0.0, np.pi / 2, np.pi, 3 * np.pi / 2, 0.0])
-    r = np.array([s, b, v, p, s])
+    theta_core = np.linspace(0, 2 * np.pi, 5, endpoint=False)
+    theta = np.concatenate([theta_core, [theta_core[0]]])
+    r = np.array([s, b, bo, v, p, s])
 
     fig, ax = plt.subplots(figsize=(3.8, 3.8), subplot_kw=dict(projection="polar"))
     fig.patch.set_facecolor(_bg)
@@ -4008,11 +4011,12 @@ def _build_alert_radar_figure(
     ax.tick_params(axis="x", colors=_text, labelsize=7, pad=14)
     ax.grid(True, color=_grid, linestyle="-", linewidth=0.7, alpha=0.85)
 
-    ax.set_xticks([0, np.pi / 2, np.pi, 3 * np.pi / 2])
+    ax.set_xticks(theta_core)
     ax.set_xticklabels(
         [
             "Structure\nQuality",
             "Bias\nStrength",
+            "Breakout\nQuality",
             "Volatility\nFitness",
             "Pullback\nQuality",
         ],
@@ -4072,6 +4076,7 @@ def _show_alert_radar_dialog() -> None:
             payload.get("bias_strength"),
             payload.get("structure_quality"),
             payload.get("pullback_quality"),
+            payload.get("breakout_quality"),
             payload.get("volatility_fitness"),
         )
         png = _alert_radar_figure_to_png(fig)
@@ -4537,6 +4542,21 @@ def trading_control_panel_page():
         else:
             alert_risky_html = '<span class="tcp-risk-pill tcp-risk-pill-unknown">N/A</span>'
     pb_state = latest_pb.get("pullback_state", "NONE") if latest_pb else "NONE"
+    breakout_state_raw = session_data_tcp.get("breakout_state")
+    if breakout_state_raw is None:
+        breakout_state_raw = (panel_data or {}).get("breakout_state")
+    if breakout_state_raw is None:
+        breakout_state_raw = ((panel_data or {}).get("session") or {}).get("breakout_state")
+    breakout_state = str(breakout_state_raw or "NONE").upper()
+    breakout_dir_raw = session_data_tcp.get("breakout_setup_direction")
+    if breakout_dir_raw is None:
+        breakout_dir_raw = (panel_data or {}).get("breakout_setup_direction")
+    if breakout_dir_raw is None:
+        breakout_dir_raw = ((panel_data or {}).get("session") or {}).get("breakout_setup_direction")
+    breakout_direction = str(breakout_dir_raw or "NONE").upper()
+    if breakout_direction not in ("LONG", "SHORT", "NONE"):
+        breakout_direction = "NONE"
+    breakout_dir_color = "#22c55e" if breakout_direction == "LONG" else "#ef4444" if breakout_direction == "SHORT" else "#9aa0a6"
     trend_level = str(trend_strength.get("level", "WEAK")).upper()
     trend_direction = str(trend_strength.get("direction", "NEUTRAL")).upper()
     if trend_level not in ("WEAK", "VALID", "STRONG"):
@@ -4685,6 +4705,18 @@ def trading_control_panel_page():
             """,
                 unsafe_allow_html=True,
             )
+            st.markdown(
+                f"""
+            <div class="tcp-panel">
+                <div class="tcp-panel-label">BREAKOUT STATUS</div>
+                <div style="height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.35rem;">
+                    <div style="font-size:0.78rem;font-weight:700;letter-spacing:0.06em;color:#cfd8e3;">STATE: {breakout_state}</div>
+                    <div style="font-size:0.76rem;font-weight:700;letter-spacing:0.06em;color:{breakout_dir_color};">DIRECTION: {breakout_direction}</div>
+                </div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
 
     with st.container(border=True):
         st.caption("Quick Controls")
@@ -4752,6 +4784,7 @@ def trading_control_panel_page():
                 _sr_scores.get("bias_strength"),
                 _sr_scores.get("structure_quality"),
                 _sr_scores.get("pullback_quality"),
+                _sr_scores.get("breakout_quality"),
                 _sr_scores.get("volatility_fitness"),
             )
             _sr_png = _alert_radar_figure_to_png(_sr_fig, pad_inches=0.42)
