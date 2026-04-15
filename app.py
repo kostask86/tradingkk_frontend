@@ -2634,9 +2634,33 @@ def sessions_page():
                 st.caption(f"Last Alert At: **{_fmt_dt(sess.get('last_alert_at'))}**")
                 breakout_cols = st.columns(4)
                 with breakout_cols[0]:
-                    st.caption(f"Breakout State: **{sess.get('breakout_state', 'NONE')}**")
+                    breakout_state = str(sess.get("breakout_state", "NONE") or "NONE").upper()
+                    breakout_state_color = (
+                        "#f59e0b"
+                        if breakout_state == "AWAITING_RETEST"
+                        else "#22c55e"
+                        if breakout_state == "RETEST_VALID"
+                        else "#9aa0a6"
+                    )
+                    st.markdown(
+                        (
+                            "Breakout State: "
+                            f"<span style='color:{breakout_state_color};font-weight:700;'>{html.escape(breakout_state)}</span>"
+                        ),
+                        unsafe_allow_html=True,
+                    )
                 with breakout_cols[1]:
-                    st.caption(f"Breakout Direction: **{sess.get('breakout_setup_direction', '—')}**")
+                    breakout_direction = str(sess.get("breakout_setup_direction", "—") or "—").upper()
+                    breakout_direction_color = (
+                        "#22c55e" if breakout_direction == "LONG" else "#ef4444" if breakout_direction == "SHORT" else "#9aa0a6"
+                    )
+                    st.markdown(
+                        (
+                            "Breakout Direction: "
+                            f"<span style='color:{breakout_direction_color};font-weight:700;'>{html.escape(breakout_direction)}</span>"
+                        ),
+                        unsafe_allow_html=True,
+                    )
                 with breakout_cols[2]:
                     st.caption(f"Breakout Level: **{sess.get('breakout_level', '—')}**")
                 with breakout_cols[3]:
