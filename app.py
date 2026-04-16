@@ -110,10 +110,25 @@ st.markdown(
         align-items: center;
         gap: 0.5rem;
     }
+    .tcp-status-stack {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.2rem;
+        line-height: 1;
+    }
+    .tcp-status-main {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
     .tcp-led {
         width: 12px;
         height: 12px;
         border-radius: 50%;
+    }
+    .tcp-led-pulse {
+        animation: tcp-led-pulse 1.05s ease-in-out infinite;
     }
     .tcp-led-online {
         background: #22c55e;
@@ -133,6 +148,22 @@ st.markdown(
     }
     .tcp-status-offline {
         color: #ef4444;
+    }
+    .tcp-updated-line {
+        font-size: 0.67rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: #9aa0a6;
+        white-space: nowrap;
+    }
+    .tcp-updated-line-refreshing {
+        color: #7dd3fc;
+        text-shadow: 0 0 8px rgba(125, 211, 252, 0.35);
+    }
+    @keyframes tcp-led-pulse {
+        0% { transform: scale(1); opacity: 0.86; }
+        50% { transform: scale(1.18); opacity: 1; }
+        100% { transform: scale(1); opacity: 0.86; }
     }
     .tcp-grid {
         display: grid;
@@ -3983,7 +4014,11 @@ def _build_alert_radar_figure(
     breakout_quality: object,
     volatility_fitness: object,
 ):
-    """Polar radar (0–100): structure, bias, breakout, volatility, pullback."""
+    """Polar radar (0–100): structure, bias, breakout, volatility, pullback.
+
+    Raw scores are 0–100; a value of 0 is drawn at a small radius (5) only for visibility,
+    with a footnote on the figure. Numeric metrics elsewhere use true values.
+    """
     import matplotlib
 
     try:
@@ -4009,6 +4044,12 @@ def _build_alert_radar_figure(
         except (TypeError, ValueError):
             return 0.0
 
+    # Display-only: map exact 0 → small radius so the polygon does not collapse to the center.
+    _RADAR_DISPLAY_FLOOR = 5.0
+
+    def _r_for_draw(score: float) -> float:
+        return _RADAR_DISPLAY_FLOOR if score <= 0.0 else score
+
     # Clockwise from top: Structure, Bias, Breakout, Volatility, Pullback
     s = _f(structure_quality)
     b = _f(bias_strength)
@@ -4018,7 +4059,16 @@ def _build_alert_radar_figure(
 
     theta_core = np.linspace(0, 2 * np.pi, 5, endpoint=False)
     theta = np.concatenate([theta_core, [theta_core[0]]])
-    r = np.array([s, b, bo, v, p, s])
+    r = np.array(
+        [
+            _r_for_draw(s),
+            _r_for_draw(b),
+            _r_for_draw(bo),
+            _r_for_draw(v),
+            _r_for_draw(p),
+            _r_for_draw(s),
+        ]
+    )
 
     fig, ax = plt.subplots(figsize=(3.8, 3.8), subplot_kw=dict(projection="polar"))
     fig.patch.set_facecolor(_bg)
@@ -4064,7 +4114,17 @@ def _build_alert_radar_figure(
         pad=14,
     )
 
-    fig.tight_layout()
+    fig.text(
+        0.5,
+        0.02,
+        f"0 shown as minimum radius ({int(_RADAR_DISPLAY_FLOOR)}) for visibility — scores below are unchanged in metrics.",
+        ha="center",
+        va="bottom",
+        fontsize=6,
+        color=_text_muted,
+        transform=fig.transFigure,
+    )
+    fig.tight_layout(rect=[0.0, 0.06, 1.0, 1.0])
     return fig
 
 
@@ -4274,24 +4334,6 @@ def trading_control_panel_page():
     except Exception:
         pass
 
-    led_class = "tcp-led-online" if backend_ok else "tcp-led-offline"
-    status_class = "tcp-status-online" if backend_ok else "tcp-status-offline"
-    status_text = "SYSTEM ONLINE" if backend_ok else "SYSTEM OFFLINE"
-
-    st.markdown(
-        f"""
-        <div class="tcp-top-bar">
-            <div style="width: 140px;"></div>
-            <div class="tcp-title">TRADING CONTROL PANEL</div>
-            <div class="tcp-status">
-                <span class="tcp-led {led_class}"></span>
-                <span class="tcp-status-text {status_class}">{status_text}</span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
     _knob_w = st.session_state.get("tcp_sess_knob_widget")
     if _knob_w is not None:
         try:
@@ -4323,16 +4365,12 @@ def trading_control_panel_page():
     tcp_last_fetch_ts = float(st.session_state.get("tcp_last_fetch_ts", 0.0))
     tcp_elapsed = max(0.0, time.time() - tcp_last_fetch_ts)
     tcp_remaining = max(0, int(tcp_interval_seconds - tcp_elapsed))
+    last_fetch_label = "Updated · waiting for first fetch"
+    if tcp_last_fetch_ts > 0:
+        fetched_at = datetime.fromtimestamp(tcp_last_fetch_ts, tz=timezone.utc).strftime("%H:%M:%S UTC")
+        seconds_ago = int(max(0.0, tcp_elapsed))
+        last_fetch_label = f"Updated · {fetched_at} ({seconds_ago}s ago)"
 
-    status_col, refresh_col = st.columns([20, 1])
-    with refresh_col:
-        if st.button("↻", key="tcp_refresh_now_btn", help="Refresh all trading panels now"):
-            st.session_state["tcp_force_refresh"] = True
-            st.rerun()
-
-    with status_col:
-        _tcp_auto_refresh_fragment()
-    force_refresh = bool(st.session_state.pop("tcp_force_refresh", False))
     panel_data = st.session_state.get("tcp_panel_result")
     panel_session_id = None
     if isinstance(panel_data, dict):
@@ -4343,6 +4381,44 @@ def trading_control_panel_page():
         panel_session_id = int(panel_session_id) if panel_session_id is not None else None
     except (TypeError, ValueError):
         panel_session_id = None
+    force_refresh_pending = bool(st.session_state.get("tcp_force_refresh", False))
+    need_fetch = force_refresh_pending or knob_changed or (not panel_data) or (panel_session_id != int(session_id_tcp))
+
+    led_class = "tcp-led-online" if backend_ok else "tcp-led-offline"
+    led_pulse_class = "tcp-led-pulse" if need_fetch else ""
+    status_class = "tcp-status-online" if backend_ok else "tcp-status-offline"
+    status_text = "SYSTEM ONLINE" if backend_ok else "SYSTEM OFFLINE"
+    freshness_class = "tcp-updated-line tcp-updated-line-refreshing" if need_fetch else "tcp-updated-line"
+    freshness_text = "Refreshing data..." if need_fetch else last_fetch_label
+
+    st.markdown(
+        f"""
+        <div class="tcp-top-bar">
+            <div style="width: 140px;"></div>
+            <div class="tcp-title">TRADING CONTROL PANEL</div>
+            <div class="tcp-status">
+                <div class="tcp-status-stack">
+                    <span class="tcp-status-main">
+                        <span class="tcp-led {led_class} {led_pulse_class}"></span>
+                        <span class="tcp-status-text {status_class}">{status_text}</span>
+                    </span>
+                    <span class="{freshness_class}">{html.escape(freshness_text)}</span>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    status_col, refresh_col = st.columns([20, 1])
+    with refresh_col:
+        if st.button("↻", key="tcp_refresh_now_btn", help="Refresh all trading panels now"):
+            st.session_state["tcp_force_refresh"] = True
+            st.rerun()
+
+    with status_col:
+        _tcp_auto_refresh_fragment()
+    force_refresh = bool(st.session_state.pop("tcp_force_refresh", False))
     need_fetch = force_refresh or knob_changed or (not panel_data) or (panel_session_id != int(session_id_tcp))
     if need_fetch:
         try:
