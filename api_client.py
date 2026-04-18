@@ -297,6 +297,14 @@ def cancel_session_alerts(session_id: int) -> dict:
     return _handle_response(resp)
 
 
+# ── Alert evaluations ────────────────────────────────────────────────
+
+def create_alert_evaluation(payload: dict) -> dict:
+    """POST /api/alert-evaluations — discretionary alert review (LLM)."""
+    resp = requests.post(f"{BASE_URL}/api/alert-evaluations", json=payload)
+    return _handle_response(resp, 201)
+
+
 # ── Trades ────────────────────────────────────────────────────────────
 
 def list_session_trades(session_id: int, limit: int = 100, offset: int = 0) -> list[dict]:

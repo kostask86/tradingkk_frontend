@@ -1,6 +1,8 @@
 import base64
 import html
 import io
+import json
+import os
 import streamlit as st
 import streamlit.components.v1 as components
 import api_client
@@ -768,12 +770,12 @@ st.markdown(
         color: #9ecde8 !important;
         box-shadow: 0 0 10px rgba(58, 144, 184, 0.35) !important;
     }
-    div:has(#tcp-guardian-btn-marker) + div {
+    div[data-testid="stElementContainer"]:has(#tcp-guardian-btn-marker) + div[data-testid="stElementContainer"] {
         display: flex !important;
         justify-content: center !important;
         width: 100% !important;
     }
-    div:has(#tcp-guardian-btn-marker) + div button {
+    div[data-testid="stElementContainer"]:has(#tcp-guardian-btn-marker) + div[data-testid="stElementContainer"] button {
         background: linear-gradient(180deg, #6f1d62 0%, #4d1246 100%) !important;
         color: #ffd5f5 !important;
         border: 1px solid rgba(255, 120, 220, 0.55) !important;
@@ -785,12 +787,60 @@ st.markdown(
         padding: 0.35rem 0.9rem !important;
         font-size: 0.76rem !important;
         border-radius: 8px !important;
-        min-width: 220px !important;
         white-space: nowrap !important;
     }
-    div:has(#tcp-guardian-btn-marker) + div button:hover {
+    div[data-testid="stElementContainer"]:has(#tcp-guardian-btn-marker) + div[data-testid="stElementContainer"] button:hover {
         color: #ffe8fb !important;
         box-shadow: 0 0 12px rgba(255, 77, 208, 0.38), 0 0 20px rgba(255, 77, 208, 0.2) !important;
+    }
+    div[data-testid="stElementContainer"]:has(#tcp-jdi-btn-marker) + div[data-testid="stElementContainer"] {
+        display: flex !important;
+        justify-content: center !important;
+        width: 100% !important;
+    }
+    div[data-testid="stElementContainer"]:has(#tcp-jdi-btn-marker) + div[data-testid="stElementContainer"] button {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 0.45rem !important;
+        background: linear-gradient(180deg, #1a2520 0%, #0c120f 100%) !important;
+        color: #d8f5e4 !important;
+        border: 1px solid rgba(110, 231, 183, 0.38) !important;
+        box-shadow:
+            0 0 0 1px rgba(0, 0, 0, 0.42),
+            0 0 10px rgba(52, 211, 153, 0.2),
+            0 0 22px rgba(74, 222, 128, 0.14),
+            inset 0 1px 0 rgba(167, 243, 208, 0.1) !important;
+        font-weight: 800 !important;
+        letter-spacing: 0.1em !important;
+        text-transform: uppercase !important;
+        min-height: 34px !important;
+        padding: 0.35rem 0.95rem !important;
+        font-size: 0.74rem !important;
+        border-radius: 8px !important;
+        white-space: nowrap !important;
+    }
+    div[data-testid="stElementContainer"]:has(#tcp-jdi-btn-marker) + div[data-testid="stElementContainer"] button::before {
+        content: "" !important;
+        display: inline-block !important;
+        width: 34px !important;
+        height: 14px !important;
+        flex-shrink: 0 !important;
+        background-repeat: no-repeat !important;
+        background-position: center !important;
+        background-size: contain !important;
+    }
+    div[data-testid="stElementContainer"]:has(#tcp-jdi-btn-marker) + div[data-testid="stElementContainer"] button:hover {
+        color: #ecfdf5 !important;
+        border-color: rgba(134, 239, 172, 0.55) !important;
+        box-shadow:
+            0 0 0 1px rgba(0, 0, 0, 0.38),
+            0 0 14px rgba(52, 211, 153, 0.32),
+            0 0 28px rgba(74, 222, 128, 0.22),
+            inset 0 1px 0 rgba(209, 250, 229, 0.14) !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-ai-actions-panel-marker) [data-testid="stHorizontalBlock"] {
+        justify-content: center !important;
     }
     div[data-testid="stVerticalBlockBorderWrapper"]:has(.tcp-quick-subpanel-label) {
         min-height: 128px;
@@ -4187,6 +4237,256 @@ def _show_alert_radar_dialog() -> None:
         st.metric("Pullback quality", _radar_metric_int(payload.get("pullback_quality")))
 
 
+def _tcp_nike_logo_b64() -> str | None:
+    """Load nike.png from the app directory for the JUST TRADE IT? button."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nike.png")
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode("ascii")
+    except OSError:
+        return None
+
+
+def _jti_float(x: object, default: float = 0.0) -> float:
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return default
+
+
+def _jti_bar_time_iso(t: object) -> str | None:
+    if t is None:
+        return None
+    if isinstance(t, str):
+        s = t.strip().replace(" ", "T", 1)
+        if s.endswith("+00:00"):
+            return s[:-6] + "Z"
+        return s
+    if hasattr(t, "isoformat"):
+        try:
+            s = t.isoformat()
+            if s.endswith("+00:00"):
+                return s[:-6] + "Z"
+            return s
+        except Exception:
+            return str(t)
+    return str(t)
+
+
+def _jti_session_context_from_panel(panel: dict, last_bar: dict | None) -> dict:
+    """Build Session1mContext / Session5mContext (without alignment) from trading control panel + last bar."""
+    sess = (panel or {}).get("session") or {}
+    lb = last_bar or {}
+    latest_bias = (panel or {}).get("latest_bias_calculation") or {}
+    latest_vol = (panel or {}).get("latest_volatility_calculation") or {}
+    trend = (panel or {}).get("trend_strenght") or {}
+
+    def _up(v: object, d: str = "NEUTRAL") -> str:
+        return str(v or d).upper()
+
+    state_bias = _up((panel or {}).get("state_bias") or sess.get("state_bias"), "NEUTRAL")
+    candidate_bias = _up(sess.get("candidate_bias"), state_bias)
+    structure_bias = _up(latest_bias.get("structure_bias"), "NEUTRAL")
+    level = str(trend.get("level", "WEAK")).upper()
+    trend_label = {"STRONG": "STRONG", "VALID": "MODERATE", "WEAK": "WEAK"}.get(level, level)
+    vol_ratio = _jti_float(latest_vol.get("vol_ratio"), 1.0)
+    atr14 = _jti_float(latest_vol.get("atr14") or lb.get("atr14"), 0.0)
+    sma9 = _jti_float(lb.get("sma9"), 0.0)
+    sma20 = _jti_float(lb.get("sma20"), 0.0)
+    close_px = _jti_float(lb.get("close"), 0.0)
+    if sma9 == 0.0 and close_px:
+        sma9 = close_px
+    if sma20 == 0.0 and close_px:
+        sma20 = close_px
+    if atr14 == 0.0 and close_px:
+        atr14 = abs(close_px) * 0.0005 + 1e-6
+    if sma9 == 0.0:
+        sma9 = 1.0
+    if sma20 == 0.0:
+        sma20 = 1.0
+    return {
+        "state_bias": state_bias,
+        "candidate_bias": candidate_bias,
+        "structure_bias": structure_bias,
+        "trend_strength": trend_label,
+        "vol_ratio": vol_ratio,
+        "atr14": atr14,
+        "sma9": sma9,
+        "sma20": sma20,
+    }
+
+
+def _jti_session_5m_with_alignment(ctx_5m: dict, ctx_1m: dict) -> dict:
+    return {
+        **ctx_5m,
+        "alignment_with_1m": bool(
+            ctx_5m.get("state_bias") == ctx_1m.get("state_bias")
+            and ctx_5m.get("candidate_bias") == ctx_1m.get("candidate_bias")
+        ),
+    }
+
+
+def _jti_enriched_bars_to_ohlc_series(bars: list, tail_n: int) -> dict | None:
+    if not isinstance(bars, list) or not bars:
+        return None
+    n = max(1, min(int(tail_n), len(bars)))
+    tail = bars[-n:]
+    out: list[dict] = []
+    for b in tail:
+        if not isinstance(b, dict):
+            continue
+        t = _jti_bar_time_iso(b.get("date") or b.get("time"))
+        if not t:
+            continue
+        row: dict = {
+            "time": t,
+            "open": _jti_float(b.get("open")),
+            "high": _jti_float(b.get("high")),
+            "low": _jti_float(b.get("low")),
+            "close": _jti_float(b.get("close")),
+        }
+        if b.get("volume") is not None:
+            try:
+                row["volume"] = float(b["volume"])
+            except (TypeError, ValueError):
+                pass
+        out.append(row)
+    if not out:
+        return None
+    return {"bar_count": len(out), "bars": out}
+
+
+def _jti_ohlc_for_preview(ohlc: dict) -> dict:
+    """OHLC block for the JTI preview: time + OHLC only (drop volume and extras)."""
+    bars_out: list[dict] = []
+    for b in ohlc.get("bars") or []:
+        if not isinstance(b, dict):
+            continue
+        row = {k: v for k, v in b.items() if k != "volume"}
+        bars_out.append(row)
+    return {"bar_count": len(bars_out), "bars": bars_out}
+
+
+def _jti_fetch_tf_bundle(session_id: int, tail_bars: int) -> tuple[dict | None, dict | None, str | None]:
+    """Load trading control panel + visualize bars; return (session_tf_context, ohlc_series, error)."""
+    try:
+        panel = api_client.get_trading_control_panel(int(session_id))
+    except APIError as e:
+        return None, None, str(e.detail)
+    except Exception as e:
+        return None, None, str(e)
+    if not isinstance(panel, dict):
+        return None, None, "Empty trading control panel response."
+    try:
+        psid = int(panel.get("session_id")) if panel.get("session_id") is not None else None
+    except (TypeError, ValueError):
+        psid = None
+    if psid is None or psid != int(session_id):
+        return None, None, f"Trading panel session mismatch for id {session_id}."
+    nb = max(20, min(1000, int(tail_bars) + 30))
+    try:
+        viz = api_client.visualize_session(int(session_id), nb)
+    except APIError as e:
+        return None, None, str(e.detail)
+    except Exception as e:
+        return None, None, str(e)
+    bars = viz.get("bars") if isinstance(viz, dict) else []
+    if not isinstance(bars, list) or not bars:
+        return None, None, f"No bars returned for session {session_id}."
+    ohlc = _jti_enriched_bars_to_ohlc_series(bars, int(tail_bars))
+    if not ohlc:
+        return None, None, f"Could not build OHLC series for session {session_id}."
+    last = bars[-1] if isinstance(bars[-1], dict) else {}
+    ctx = _jti_session_context_from_panel(panel, last)
+    return ctx, ohlc, None
+
+
+def _jti_load_session_bars_preview(sid_1m: int, sid_5m: int, tail_bars: int) -> dict:
+    """Trimmed session + OHLC preview for the JTI dialog (same bundle as alert-evaluation POST)."""
+    ctx1, ohlc1, err1 = _jti_fetch_tf_bundle(int(sid_1m), int(tail_bars))
+    ctx5, ohlc5, err5 = _jti_fetch_tf_bundle(int(sid_5m), int(tail_bars))
+    if err1:
+        raise ValueError(err1)
+    if err5:
+        raise ValueError(err5)
+    if not ctx1 or not ohlc1:
+        raise ValueError(f"Could not load 1m session preview for id {sid_1m}.")
+    if not ctx5 or not ohlc5:
+        raise ValueError(f"Could not load 5m session preview for id {sid_5m}.")
+    b1 = str(ctx1.get("state_bias") or "").upper()
+    b5 = str(ctx5.get("state_bias") or "").upper()
+    session_5m = {**ctx5, "alignment_with_1m": b1 == b5}
+    return {
+        "session_1m": ctx1,
+        "ohlc_1m": _jti_ohlc_for_preview(ohlc1),
+        "session_5m": session_5m,
+        "ohlc_5m": _jti_ohlc_for_preview(ohlc5),
+    }
+
+
+def _jti_build_evaluation_payload(
+    *,
+    instrument: str,
+    timestamp: str,
+    direction: str,
+    entry_price: float,
+    master_sid: int,
+    sid_1m: int,
+    sid_5m: int,
+    num_bars: int,
+    headline_block: str,
+    news_bias: str,
+) -> dict:
+    """Fetch 1m/5m snapshots and assemble the full POST /api/alert-evaluations body."""
+    ctx1, ohlc1, err1 = _jti_fetch_tf_bundle(int(sid_1m), int(num_bars))
+    ctx5, ohlc5, err5 = _jti_fetch_tf_bundle(int(sid_5m), int(num_bars))
+    if err1:
+        raise ValueError(err1)
+    if err5:
+        raise ValueError(err5)
+
+    entry_eff = float(entry_price)
+    if entry_eff <= 0 and ohlc1 and isinstance(ohlc1.get("bars"), list) and ohlc1["bars"]:
+        last_bar = ohlc1["bars"][-1]
+        if isinstance(last_bar, dict):
+            entry_eff = float(last_bar.get("close") or 0)
+    if entry_eff <= 0:
+        raise ValueError("Enter a positive entry price (or leave 0 to use the last 1m bar close after load).")
+
+    ctx5m = _jti_session_5m_with_alignment(ctx5 or {}, ctx1 or {})
+    lines = [ln.strip() for ln in str(headline_block).splitlines() if str(ln).strip()]
+    qual: dict = {"news_bias": str(news_bias).strip() or "neutral"}
+    if lines:
+        qual["headline_summary"] = lines
+
+    inst = str(instrument).strip().upper()
+    if not inst:
+        try:
+            s1 = api_client.get_session(int(sid_1m))
+            inst = str(s1.get("symbol") or "").strip().upper()
+        except Exception:
+            inst = ""
+    if not inst:
+        raise ValueError("Instrument is required (or must be derivable from the 1m session).")
+    if not str(timestamp).strip():
+        raise ValueError("Timestamp is required.")
+
+    sid_link = int(master_sid) if int(master_sid) >= 1 else None
+    return {
+        "instrument": inst,
+        "timestamp": str(timestamp).strip(),
+        "proposed_setup": {"direction": str(direction).upper(), "entry_price": float(entry_eff)},
+        "session_1m": ctx1,
+        "session_5m": ctx5m,
+        "qualitative_context": qual,
+        "ohlc_1m": ohlc1,
+        "ohlc_5m": ohlc5,
+        "session_id": sid_link,
+    }
+
+
 @st.dialog("AI Guardian Angel", width="large")
 def _show_guardian_angel_dialog():
     st.markdown("### AI Guardian Angel")
@@ -4320,6 +4620,163 @@ def _show_guardian_angel_dialog():
             st.json(llm_part)
         else:
             st.json(ga_result)
+
+
+@st.dialog("Just Trade It — Alert evaluation", width="large")
+def _show_alert_evaluation_dialog(default_master_sid: int) -> None:
+    st.markdown("### Alert evaluation")
+    st.caption(
+        "POST **/api/alert-evaluations** — snapshots are loaded from the 1m and 5m **session IDs**; "
+        "the **master session ID** is stored on the evaluation row."
+    )
+    if int(st.session_state.get("_jti_dialog_instance_sid") or -1) != int(default_master_sid):
+        st.session_state["_jti_dialog_instance_sid"] = int(default_master_sid)
+        st.session_state["jti_request_body_json"] = ""
+
+    try:
+        _seed_sess = api_client.get_session(int(default_master_sid))
+        _instr0 = str(_seed_sess.get("symbol") or "").strip()
+    except Exception:
+        _instr0 = ""
+
+    _r1, _r2 = st.columns(2)
+    with _r1:
+        jti_instrument = st.text_input(
+            "Instrument",
+            value=_instr0,
+            key="jti_instrument",
+            placeholder="e.g. BTCUSD",
+        )
+        jti_direction = st.selectbox("Direction (proposed setup)", ["LONG", "SHORT"], key="jti_direction")
+        jti_entry = st.number_input(
+            "Entry price (proposed setup)",
+            min_value=0.0,
+            value=0.0,
+            format="%.8f",
+            key="jti_entry_price",
+        )
+    with _r2:
+        jti_master_sid = st.number_input(
+            "Master session ID (link evaluation)",
+            min_value=1,
+            value=max(1, int(default_master_sid)),
+            step=1,
+            key="jti_master_session_id",
+        )
+        jti_sid_1m = st.number_input(
+            "Session ID — 1m snapshot",
+            min_value=1,
+            value=max(1, int(default_master_sid)),
+            step=1,
+            key="jti_session_id_1m",
+        )
+        jti_sid_5m = st.number_input(
+            "Session ID — 5m snapshot",
+            min_value=1,
+            value=max(1, int(default_master_sid)),
+            step=1,
+            key="jti_session_id_5m",
+        )
+
+    jti_ts = st.text_input(
+        "Timestamp (UTC, ISO-8601)",
+        value=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        key="jti_timestamp_iso",
+        help="Anchor for the evaluation (e.g. signal bar close).",
+    )
+
+    st.markdown("**Qualitative context**")
+    jti_headlines = st.text_area(
+        "Headline summary (one bullet per line)",
+        value="",
+        height=110,
+        key="jti_headline_summary",
+        placeholder="Risk assets firm into the US session open.\nBTC holding above prior day VWAP.",
+    )
+    jti_news_bias = st.text_input(
+        "News bias",
+        value="neutral",
+        key="jti_news_bias",
+        placeholder="e.g. slightly_bullish",
+    )
+
+    jti_num_bars = st.number_input(
+        "OHLC bars per timeframe (tail)",
+        min_value=6,
+        max_value=200,
+        value=64,
+        step=1,
+        key="jti_num_bars_tail",
+    )
+
+    st.markdown("**Session & bars preview (JSON)**")
+    # LOAD NOW must run before st.text_area(key=...) so session_state can be updated without
+    # "cannot be modified after the widget ... is instantiated".
+    jti_load = st.button("LOAD NOW", use_container_width=True, key="jti_load_now_btn")
+    if jti_load:
+        try:
+            _jti_preview = _jti_load_session_bars_preview(
+                int(jti_sid_1m),
+                int(jti_sid_5m),
+                int(jti_num_bars),
+            )
+            st.session_state["jti_request_body_json"] = json.dumps(_jti_preview, indent=2, default=str)
+        except ValueError as e:
+            st.error(str(e))
+        except APIError as e:
+            st.error(str(e.detail))
+        except Exception as e:
+            st.error(f"Could not load preview: {e}")
+
+    _jti_body_nonempty = bool(str(st.session_state.get("jti_request_body_json", "")).strip())
+    st.text_area(
+        "Session & bars preview (JSON)",
+        key="jti_request_body_json",
+        height=380,
+        placeholder="Click LOAD NOW to fetch session GET + visualize bars for the two session IDs.",
+        disabled=not _jti_body_nonempty,
+    )
+
+    jti_ask = st.button(
+        "Ask AI",
+        type="primary",
+        use_container_width=True,
+        key="jti_ask_ai_btn",
+        disabled=not _jti_body_nonempty,
+    )
+
+    if jti_ask:
+        if not str(st.session_state.get("jti_request_body_json", "")).strip():
+            st.error("Load the session & bars preview first (LOAD NOW).")
+        else:
+            try:
+                _payload = _jti_build_evaluation_payload(
+                    instrument=str(jti_instrument).strip(),
+                    timestamp=str(jti_ts).strip(),
+                    direction=str(jti_direction),
+                    entry_price=float(jti_entry),
+                    master_sid=int(jti_master_sid),
+                    sid_1m=int(jti_sid_1m),
+                    sid_5m=int(jti_sid_5m),
+                    num_bars=int(jti_num_bars),
+                    headline_block=str(jti_headlines),
+                    news_bias=str(jti_news_bias),
+                )
+                resp = api_client.create_alert_evaluation(_payload)
+                st.session_state["jti_last_result"] = resp
+                st.success("Alert evaluation created.")
+                st.json(resp)
+            except ValueError as e:
+                st.error(str(e))
+            except APIError as e:
+                st.error(str(e.detail))
+            except Exception as e:
+                st.error(f"Connection error: {e}")
+
+    _prev = st.session_state.get("jti_last_result")
+    if isinstance(_prev, dict) and not jti_ask and not jti_load:
+        st.markdown("**Last result**")
+        st.json(_prev)
 
 
 def trading_control_panel_page():
@@ -4906,19 +5363,46 @@ style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;
         except Exception:
             st.caption("Session radar could not be drawn. Load a valid session or refresh the panel.")
 
-    guardian_left, guardian_mid, guardian_right = st.columns([4, 2, 4])
-    with guardian_mid:
+    with st.container(border=True):
+        st.caption("AI assistant")
         st.markdown(
-            '<span id="tcp-guardian-btn-marker" style="display:block;height:0;margin:0;padding:0;line-height:0;overflow:hidden;width:0" aria-hidden="true"></span>',
+            '<span id="tcp-ai-actions-panel-marker" aria-hidden="true" style="display:block;height:0;margin:0;padding:0;line-height:0;width:0;overflow:hidden"></span>',
             unsafe_allow_html=True,
         )
-        if st.button(
-            "👼 AI Guardian Angel",
-            key="tcp_ai_guardian_angel_btn",
-            use_container_width=False,
-        ):
-            st.session_state["ga_session_id"] = int(session_id_tcp)
-            _show_guardian_angel_dialog()
+        _aa_pad_l, _aa_guardian, _aa_jdi, _aa_pad_r = st.columns([2, 3, 3, 2])
+        with _aa_guardian:
+            st.markdown(
+                '<span id="tcp-guardian-btn-marker" style="display:block;height:0;margin:0;padding:0;line-height:0;overflow:hidden;width:0" aria-hidden="true"></span>',
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                "👼 AI Guardian Angel",
+                key="tcp_ai_guardian_angel_btn",
+                use_container_width=True,
+            ):
+                st.session_state["ga_session_id"] = int(session_id_tcp)
+                _show_guardian_angel_dialog()
+        with _aa_jdi:
+            _nike_b64 = _tcp_nike_logo_b64()
+            _jdi_head = (
+                '<span id="tcp-jdi-btn-marker" style="display:block;height:0;margin:0;padding:0;'
+                'line-height:0;overflow:hidden;width:0" aria-hidden="true"></span>'
+            )
+            if _nike_b64:
+                _jdi_head += (
+                    "<style>"
+                    'div[data-testid="stElementContainer"]:has(#tcp-jdi-btn-marker) '
+                    '+ div[data-testid="stElementContainer"] button::before {'
+                    f'background-image:url("data:image/png;base64,{_nike_b64}") !important;'
+                    "}</style>"
+                )
+            st.markdown(_jdi_head, unsafe_allow_html=True)
+            if st.button(
+                "JUST TRADE IT?",
+                key="tcp_just_do_it_btn",
+                use_container_width=True,
+            ):
+                _show_alert_evaluation_dialog(int(session_id_tcp))
 
 def information_page():
     import html
