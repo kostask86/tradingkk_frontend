@@ -5161,6 +5161,27 @@ def trading_control_panel_page():
     if breakout_direction not in ("LONG", "SHORT", "NONE"):
         breakout_direction = "NONE"
     breakout_dir_color = "#22c55e" if breakout_direction == "LONG" else "#ef4444" if breakout_direction == "SHORT" else "#9aa0a6"
+    swq_raw = session_data_tcp.get("session_window_quality")
+    swq = str(swq_raw or "UNKNOWN").strip().upper()
+    swq_desc_raw = session_data_tcp.get("session_window_quality_desc")
+    if swq_desc_raw is None:
+        swq_desc_raw = session_data_tcp.get("session_window_quality_description")
+    if isinstance(swq_desc_raw, list):
+        swq_desc = " | ".join([str(x).strip() for x in swq_desc_raw if str(x).strip()])
+    else:
+        swq_desc = str(swq_desc_raw).strip() if swq_desc_raw is not None else ""
+    swq_color_map = {
+        "CLEAR": "#5cefff",
+        "SKIP": "#ffb347",
+        "EXCELLENT": "#22c55e",
+        "VERY_GOOD": "#34d399",
+        "GOOD": "#5cefff",
+        "FAIR": "#f0c048",
+        "POOR": "#ef4444",
+        "BAD": "#ef4444",
+        "AVOID": "#ef4444",
+    }
+    swq_color = swq_color_map.get(swq, "#9aa0a6")
     trend_level = str(trend_strength.get("level", "WEAK")).upper()
     trend_direction = str(trend_strength.get("direction", "NEUTRAL")).upper()
     if trend_level not in ("WEAK", "VALID", "STRONG"):
@@ -5311,8 +5332,8 @@ def trading_control_panel_page():
                 unsafe_allow_html=True,
             )
 
-        breakout_row_left, breakout_row_mid, breakout_row_right = st.columns([3, 2, 3])
-        with breakout_row_mid:
+        breakout_row_left, breakout_col_breakout, breakout_col_window, breakout_row_right = st.columns([2, 3, 3, 2])
+        with breakout_col_breakout:
             st.markdown(
                 f"""
             <div class="tcp-panel">
@@ -5320,6 +5341,23 @@ def trading_control_panel_page():
                 <div style="height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.35rem;">
                     <div style="font-size:0.78rem;font-weight:700;letter-spacing:0.06em;color:#cfd8e3;">STATE: {breakout_state}</div>
                     <div style="font-size:0.76rem;font-weight:700;letter-spacing:0.06em;color:{breakout_dir_color};">DIRECTION: {breakout_direction}</div>
+                </div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
+        with breakout_col_window:
+            st.markdown(
+                f"""
+            <div class="tcp-panel">
+                <div class="tcp-panel-label">SESSION WINDOW</div>
+                <div style="height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.35rem;padding:0 0.35rem;">
+                    <div style="font-size:0.78rem;font-weight:700;letter-spacing:0.06em;color:{swq_color};">
+                        QUALITY: {swq}
+                    </div>
+                    <div style="font-size:0.68rem;font-weight:600;letter-spacing:0.02em;color:#cfd8e3;text-align:center;line-height:1.28;">
+                        {html.escape(swq_desc or "No description")}
+                    </div>
                 </div>
             </div>
             """,
