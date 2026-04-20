@@ -5510,7 +5510,7 @@ def information_page():
             st.info("No information returned yet.")
             return
 
-        strategy_sections = [
+        strategy_sections_core = [
             "session",
             "bias_calculation",
             "pullback_calculation",
@@ -5518,9 +5518,10 @@ def information_page():
             "alert",
             "trading_control_panel",
         ]
+        strategy_sections = strategy_sections_core + ["alert_evaluation"]
         has_strategy_text_payload = all(
-            isinstance(info.get(section), str) for section in strategy_sections if section in info
-        ) and any(section in info for section in strategy_sections)
+            isinstance(info.get(section), str) for section in strategy_sections_core if section in info
+        ) and any(section in info for section in strategy_sections_core)
 
         if has_strategy_text_payload:
             st.subheader("Trading Strategy Information")
@@ -5541,22 +5542,35 @@ def information_page():
                 "volatility_calculation": "Volatility Calculation",
                 "alert": "Alert",
                 "trading_control_panel": "Trading Control Panel",
+                "alert_evaluation": "Alert Evaluation",
             }
 
             for section_key in strategy_sections:
                 if section_key not in info:
                     continue
-                section_text = info.get(section_key, "")
+                section_payload = info.get(section_key)
                 with st.container(border=True):
                     st.markdown(f"**{section_titles.get(section_key, section_key.title())}**")
-                    st.markdown(
-                        (
-                            f"<div class='info-rich-text' "
-                            f"style='max-height:{panel_height}px; overflow-y:auto;'>"
-                            f"{html.escape(section_text)}</div>"
-                        ),
-                        unsafe_allow_html=True,
-                    )
+                    if isinstance(section_payload, str):
+                        st.markdown(
+                            (
+                                f"<div class='info-rich-text' "
+                                f"style='max-height:{panel_height}px; overflow-y:auto;'>"
+                                f"{html.escape(section_payload)}</div>"
+                            ),
+                            unsafe_allow_html=True,
+                        )
+                    elif isinstance(section_payload, (dict, list)):
+                        st.json(section_payload)
+                    else:
+                        st.markdown(
+                            (
+                                f"<div class='info-rich-text' "
+                                f"style='max-height:{panel_height}px; overflow-y:auto;'>"
+                                f"{html.escape('' if section_payload is None else str(section_payload))}</div>"
+                            ),
+                            unsafe_allow_html=True,
+                        )
 
             with st.expander("View raw JSON"):
                 st.json(info)
