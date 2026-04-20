@@ -2675,6 +2675,25 @@ def sessions_page():
                 with quality_cols[3]:
                     st.metric("Vol. Fitness", int(sess.get("volatility_fitness", 0) or 0))
 
+                session_window_quality = sess.get("session_window_quality")
+                session_window_quality_desc = sess.get("session_window_quality_desc")
+                if session_window_quality_desc is None:
+                    # Keep backward compatibility in case backend key naming differs.
+                    session_window_quality_desc = sess.get("session_window_quality_description")
+                if isinstance(session_window_quality_desc, list):
+                    session_window_quality_desc_text = " | ".join(
+                        [str(x).strip() for x in session_window_quality_desc if str(x).strip()]
+                    )
+                else:
+                    session_window_quality_desc_text = (
+                        str(session_window_quality_desc).strip() if session_window_quality_desc is not None else ""
+                    )
+                window_cols = st.columns(2)
+                with window_cols[0]:
+                    st.caption(f"Session Window Quality: **{session_window_quality or '—'}**")
+                with window_cols[1]:
+                    st.caption(f"Session Window Quality Desc: **{session_window_quality_desc_text or '—'}**")
+
                 param_cols = st.columns(5)
                 with param_cols[0]:
                     st.caption(f"Persist. Window: **{sess['persistence_window']}**")
@@ -4439,13 +4458,25 @@ def _jti_build_evaluation_payload(
     headline_block: str,
     news_bias: str,
 ) -> dict:
-    """Fetch 1m/5m snapshots and assemble the full POST /api/alert-evaluations body."""
-    ctx1, ohlc1, err1 = _jti_fetch_tf_bundle(int(sid_1m), int(num_bars))
-    ctx5, ohlc5, err5 = _jti_fetch_tf_bundle(int(sid_5m), int(num_bars))
-    if err1:
-        raise ValueError(err1)
-    if err5:
-        raise ValueError(err5)
+    """Assemble the POST /api/alert-evaluations body from loaded preview JSON + form fields."""
+    raw_preview = str(st.session_state.get("jti_request_body_json") or "").strip()
+    if not raw_preview:
+        raise ValueError("Load the session & bars preview first (LOAD NOW).")
+    try:
+        preview = json.loads(raw_preview)
+    except Exception as e:
+        raise ValueError(f"Preview JSON is invalid: {e}")
+
+    if not isinstance(preview, dict):
+        raise ValueError("Preview JSON must be a JSON object.")
+    ctx1 = preview.get("session_1m")
+    ctx5 = preview.get("session_5m")
+    ohlc1 = preview.get("ohlc_1m")
+    ohlc5 = preview.get("ohlc_5m")
+    if not isinstance(ctx1, dict) or not isinstance(ctx5, dict):
+        raise ValueError("Preview JSON is missing session_1m/session_5m.")
+    if not isinstance(ohlc1, dict) or not isinstance(ohlc5, dict):
+        raise ValueError("Preview JSON is missing ohlc_1m/ohlc_5m.")
 
     entry_eff = float(entry_price)
     if entry_eff <= 0 and ohlc1 and isinstance(ohlc1.get("bars"), list) and ohlc1["bars"]:
@@ -4455,7 +4486,7 @@ def _jti_build_evaluation_payload(
     if entry_eff <= 0:
         raise ValueError("Enter a positive entry price (or leave 0 to use the last 1m bar close after load).")
 
-    ctx5m = _jti_session_5m_with_alignment(ctx5 or {}, ctx1 or {})
+    ctx5m = dict(ctx5 or {})
     lines = [ln.strip() for ln in str(headline_block).splitlines() if str(ln).strip()]
     qual: dict = {"news_bias": str(news_bias).strip() or "neutral"}
     if lines:
@@ -4632,6 +4663,8 @@ def _show_alert_evaluation_dialog(default_master_sid: int) -> None:
     if int(st.session_state.get("_jti_dialog_instance_sid") or -1) != int(default_master_sid):
         st.session_state["_jti_dialog_instance_sid"] = int(default_master_sid)
         st.session_state["jti_request_body_json"] = ""
+    if "jti_entry_price" not in st.session_state:
+        st.session_state["jti_entry_price"] = 0.0
 
     try:
         _seed_sess = api_client.get_session(int(default_master_sid))
@@ -4648,13 +4681,7 @@ def _show_alert_evaluation_dialog(default_master_sid: int) -> None:
             placeholder="e.g. BTCUSD",
         )
         jti_direction = st.selectbox("Direction (proposed setup)", ["LONG", "SHORT"], key="jti_direction")
-        jti_entry = st.number_input(
-            "Entry price (proposed setup)",
-            min_value=0.0,
-            value=0.0,
-            format="%.8f",
-            key="jti_entry_price",
-        )
+        jti_entry_slot = st.empty()
     with _r2:
         jti_master_sid = st.number_input(
             "Master session ID (link evaluation)",
@@ -4666,14 +4693,14 @@ def _show_alert_evaluation_dialog(default_master_sid: int) -> None:
         jti_sid_1m = st.number_input(
             "Session ID — 1m snapshot",
             min_value=1,
-            value=max(1, int(default_master_sid)),
+            value=1,
             step=1,
             key="jti_session_id_1m",
         )
         jti_sid_5m = st.number_input(
             "Session ID — 5m snapshot",
             min_value=1,
-            value=max(1, int(default_master_sid)),
+            value=2,
             step=1,
             key="jti_session_id_5m",
         )
@@ -4704,7 +4731,7 @@ def _show_alert_evaluation_dialog(default_master_sid: int) -> None:
         "OHLC bars per timeframe (tail)",
         min_value=6,
         max_value=200,
-        value=64,
+        value=30,
         step=1,
         key="jti_num_bars_tail",
     )
@@ -4721,6 +4748,12 @@ def _show_alert_evaluation_dialog(default_master_sid: int) -> None:
                 int(jti_num_bars),
             )
             st.session_state["jti_request_body_json"] = json.dumps(_jti_preview, indent=2, default=str)
+            _bars_1m = (_jti_preview.get("ohlc_1m") or {}).get("bars") if isinstance(_jti_preview, dict) else None
+            if isinstance(_bars_1m, list) and _bars_1m:
+                _last_1m = _bars_1m[-1] if isinstance(_bars_1m[-1], dict) else {}
+                _last_close = _jti_float(_last_1m.get("close"), 0.0)
+                if _last_close > 0:
+                    st.session_state["jti_entry_price"] = _last_close
         except ValueError as e:
             st.error(str(e))
         except APIError as e:
@@ -4735,6 +4768,12 @@ def _show_alert_evaluation_dialog(default_master_sid: int) -> None:
         height=380,
         placeholder="Click LOAD NOW to fetch session GET + visualize bars for the two session IDs.",
         disabled=not _jti_body_nonempty,
+    )
+    jti_entry = jti_entry_slot.number_input(
+        "Entry price (proposed setup)",
+        min_value=0.0,
+        format="%.8f",
+        key="jti_entry_price",
     )
 
     jti_ask = st.button(
@@ -4764,8 +4803,8 @@ def _show_alert_evaluation_dialog(default_master_sid: int) -> None:
                 )
                 resp = api_client.create_alert_evaluation(_payload)
                 st.session_state["jti_last_result"] = resp
+                st.session_state["jti_last_response_json"] = json.dumps(resp, indent=2, default=str)
                 st.success("Alert evaluation created.")
-                st.json(resp)
             except ValueError as e:
                 st.error(str(e))
             except APIError as e:
@@ -4774,6 +4813,14 @@ def _show_alert_evaluation_dialog(default_master_sid: int) -> None:
                 st.error(f"Connection error: {e}")
 
     _prev = st.session_state.get("jti_last_result")
+    _prev_txt = str(st.session_state.get("jti_last_response_json") or "").strip()
+    if _prev_txt:
+        st.text_area(
+            "Alert evaluation response (JSON)",
+            key="jti_last_response_json",
+            height=220,
+            disabled=True,
+        )
     if isinstance(_prev, dict) and not jti_ask and not jti_load:
         st.markdown("**Last result**")
         st.json(_prev)
