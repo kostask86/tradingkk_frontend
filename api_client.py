@@ -305,6 +305,24 @@ def create_alert_evaluation(payload: dict) -> dict:
     return _handle_response(resp, 201)
 
 
+def list_alert_evaluations(session_id: int, limit: int = 100, offset: int = 0) -> list[dict]:
+    """GET /api/alert-evaluations — list alert evaluations for a session."""
+    resp = requests.get(
+        f"{BASE_URL}/api/alert-evaluations",
+        params={"session_id": int(session_id), "limit": int(limit), "offset": int(offset)},
+    )
+    return _handle_response(resp)
+
+
+def get_alert_evaluation(evaluation_id: int) -> dict:
+    """GET /api/alert-evaluations/detail — get a single alert evaluation by id."""
+    resp = requests.get(
+        f"{BASE_URL}/api/alert-evaluations/detail",
+        params={"evaluation_id": int(evaluation_id)},
+    )
+    return _handle_response(resp)
+
+
 # ── Trades ────────────────────────────────────────────────────────────
 
 def list_session_trades(session_id: int, limit: int = 100, offset: int = 0) -> list[dict]:

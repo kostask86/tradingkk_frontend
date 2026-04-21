@@ -1187,7 +1187,7 @@ with st.sidebar:
 
 def sessions_page():
     st.header("Session")
-    sessions_tab, bias_tab, pullback_tab, breakout_tab, volatility_tab, visualize_tab, alerts_tab, trades_tab = st.tabs(
+    sessions_tab, bias_tab, pullback_tab, breakout_tab, volatility_tab, visualize_tab, alerts_tab, trades_tab, alert_evaluations_tab = st.tabs(
         [
             "Session",
             "Bias Calculations",
@@ -1197,6 +1197,7 @@ def sessions_page():
             "Visualize",
             "Alerts",
             "Trades",
+            "Alert Evaluations",
         ]
     )
 
@@ -2420,6 +2421,80 @@ def sessions_page():
             if "trade_detail" in st.session_state:
                 st.markdown("**Trade Detail**")
                 st.json(st.session_state["trade_detail"])
+
+    with alert_evaluations_tab:
+        st.subheader("Alert Evaluations")
+
+        with st.container(border=True):
+            st.markdown("**List Session Alert Evaluations**")
+            list_cols = st.columns(4)
+            with list_cols[0]:
+                ae_session_id = st.number_input(
+                    "Session ID",
+                    min_value=1,
+                    value=1,
+                    step=1,
+                    key="ae_list_session_id",
+                )
+            with list_cols[1]:
+                ae_limit = st.number_input(
+                    "Limit", min_value=1, max_value=200, value=50, step=10, key="ae_list_limit"
+                )
+            with list_cols[2]:
+                ae_offset = st.number_input("Offset", min_value=0, value=0, step=10, key="ae_list_offset")
+            with list_cols[3]:
+                st.write("")
+                if st.button("Get Alert Evaluations", use_container_width=True, key="ae_get_list"):
+                    try:
+                        evaluations = api_client.list_alert_evaluations(
+                            session_id=int(ae_session_id),
+                            limit=int(ae_limit),
+                            offset=int(ae_offset),
+                        )
+                        st.session_state["alert_evaluations_list"] = evaluations
+                        st.success(
+                            f"Loaded {len(evaluations)} alert evaluation(s) for session #{int(ae_session_id)}."
+                        )
+                    except APIError as e:
+                        st.error(f"Failed to list alert evaluations: {e.detail}")
+                    except Exception as e:
+                        st.error(f"Connection error: {e}")
+
+            if "alert_evaluations_list" in st.session_state:
+                import pandas as pd
+
+                ae_df = pd.DataFrame(st.session_state["alert_evaluations_list"])
+                for dt_col in ["created_at", "updated_at", "timestamp"]:
+                    if dt_col in ae_df.columns:
+                        ae_df[dt_col] = ae_df[dt_col].apply(_fmt_dt)
+
+                preferred_cols = [
+                    "id",
+                    "session_id",
+                    "created_at",
+                    "instrument",
+                    "timestamp",
+                ]
+                display_cols = [c for c in preferred_cols if c in ae_df.columns] + [
+                    c for c in ae_df.columns if c not in preferred_cols
+                ]
+                st.dataframe(ae_df[display_cols], use_container_width=True, hide_index=True)
+
+        with st.container(border=True):
+            st.markdown("**Get One Alert Evaluation**")
+            ae_detail_id = st.number_input(
+                "Evaluation ID (Get One)", min_value=1, value=1, step=1, key="ae_detail_id"
+            )
+            if st.button("Get One Alert Evaluation", use_container_width=True, key="ae_get_one"):
+                try:
+                    st.session_state["alert_evaluation_detail"] = api_client.get_alert_evaluation(int(ae_detail_id))
+                except APIError as e:
+                    st.error(f"Failed to get alert evaluation: {e.detail}")
+                except Exception as e:
+                    st.error(f"Connection error: {e}")
+            if "alert_evaluation_detail" in st.session_state:
+                st.markdown("**Alert Evaluation Detail**")
+                st.json(st.session_state["alert_evaluation_detail"])
 
     with sessions_tab:
         with st.container(border=True):
