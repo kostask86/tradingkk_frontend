@@ -3,6 +3,9 @@ import html
 import io
 import json
 import os
+import math
+import struct
+import wave
 import streamlit as st
 import streamlit.components.v1 as components
 import api_client
@@ -1018,6 +1021,92 @@ def _format_hms(total_seconds: int) -> str:
 
 def _refresh_seconds_for_timeframe(timeframe: str | None) -> int:
     return int(TIMEFRAME_REFRESH_SECONDS.get((timeframe or "").strip(), 60))
+
+
+ALERT_SOUND_PRESETS = {
+    "Pulse Bell": [(880.0, 0.16), (660.0, 0.16), (880.0, 0.16)],
+    "Trader Chime": [(523.25, 0.12), (659.25, 0.12), (783.99, 0.22)],
+    "Market Ping": [(1046.5, 0.09), (1318.51, 0.12)],
+    "Soft Beep": [(740.0, 0.20)],
+    "Deep Alert": [(440.0, 0.18), (330.0, 0.18)],
+}
+
+
+@st.cache_resource(show_spinner=False)
+def _alert_sound_data_uri(sound_name: str) -> str:
+    seq = ALERT_SOUND_PRESETS.get(sound_name) or ALERT_SOUND_PRESETS["Pulse Bell"]
+    sample_rate = 22050
+    amplitude = 12000
+    payload = io.BytesIO()
+    with wave.open(payload, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        for freq, duration in seq:
+            total = max(1, int(sample_rate * float(duration)))
+            attack = max(1, int(total * 0.08))
+            release = max(1, int(total * 0.14))
+            for i in range(total):
+                env = 1.0
+                if i < attack:
+                    env = i / attack
+                elif i > total - release:
+                    env = max(0.0, (total - i) / release)
+                sample = int(amplitude * env * math.sin(2.0 * math.pi * float(freq) * (i / sample_rate)))
+                wav_file.writeframesraw(struct.pack("<h", sample))
+
+    b64 = base64.b64encode(payload.getvalue()).decode("ascii")
+    return f"data:audio/wav;base64,{b64}"
+
+
+def _alert_identity(alert: object) -> str | None:
+    if not isinstance(alert, dict):
+        return None
+    alert_id = alert.get("id")
+    if alert_id is not None:
+        return str(alert_id)
+    created_at = alert.get("created_at")
+    direction = str(alert.get("direction") or "").upper()
+    a_type = str(alert.get("type") or "").upper()
+    if created_at:
+        return f"{created_at}|{direction}|{a_type}"
+    return None
+
+
+def _play_alert_sound(sound_name: str, volume_percent: int, repeats: int = 10) -> None:
+    data_uri = _alert_sound_data_uri(sound_name)
+    safe_data_uri = json.dumps(data_uri)
+    safe_volume = max(0.0, min(1.0, float(volume_percent) / 100.0))
+    safe_repeats = max(1, int(repeats))
+    components.html(
+        f"""
+        <script>
+        (() => {{
+            const src = {safe_data_uri};
+            const repeats = {safe_repeats};
+            const audio = new Audio(src);
+            audio.volume = {safe_volume};
+            audio.preload = "auto";
+            let played = 0;
+            const playNext = () => {{
+                played += 1;
+                audio.currentTime = 0;
+                const p = audio.play();
+                if (p && typeof p.catch === "function") {{
+                    p.catch(() => {{}});
+                }}
+            }};
+            audio.addEventListener("ended", () => {{
+                if (played < repeats) {{
+                    playNext();
+                }}
+            }});
+            playNext();
+        }})();
+        </script>
+        """,
+        height=0,
+    )
 
 
 @st.fragment(run_every="1s")
@@ -3929,6 +4018,56 @@ def provider_page():
             with st.expander("View raw response"):
                 st.json(cb_data)
 
+    st.divider()
+    st.subheader("Alert Sound Settings")
+    if "alert_sound_selected" not in st.session_state:
+        st.session_state["alert_sound_selected"] = "Pulse Bell"
+    if "alert_sound_volume" not in st.session_state:
+        st.session_state["alert_sound_volume"] = 70
+    if "alert_sound_repeats" not in st.session_state:
+        st.session_state["alert_sound_repeats"] = 10
+    sound_cols = st.columns([2, 1, 1, 1])
+    with sound_cols[0]:
+        selected_sound = st.selectbox(
+            "Alert sound",
+            list(ALERT_SOUND_PRESETS.keys()),
+            index=list(ALERT_SOUND_PRESETS.keys()).index(st.session_state["alert_sound_selected"])
+            if st.session_state["alert_sound_selected"] in ALERT_SOUND_PRESETS
+            else 0,
+            key="provider_alert_sound_selected_ui",
+        )
+        st.session_state["alert_sound_selected"] = selected_sound
+    with sound_cols[1]:
+        volume_percent = st.slider(
+            "Volume",
+            min_value=0,
+            max_value=100,
+            value=int(st.session_state.get("alert_sound_volume", 70)),
+            step=1,
+            key="provider_alert_sound_volume_ui",
+            help="0 = muted, 100 = max volume",
+        )
+        st.session_state["alert_sound_volume"] = int(volume_percent)
+    with sound_cols[2]:
+        repeats_count = st.number_input(
+            "Repeat count",
+            min_value=1,
+            max_value=30,
+            value=int(st.session_state.get("alert_sound_repeats", 10)),
+            step=1,
+            key="provider_alert_sound_repeats_ui",
+            help="How many times alert sound repeats when a new LONG/SHORT alert is created",
+        )
+        st.session_state["alert_sound_repeats"] = int(repeats_count)
+    with sound_cols[3]:
+        st.write("")
+        if st.button("Test sound", key="provider_alert_sound_test", use_container_width=True):
+            _play_alert_sound(
+                sound_name=str(st.session_state.get("alert_sound_selected", "Pulse Bell")),
+                volume_percent=int(st.session_state.get("alert_sound_volume", 70)),
+                repeats=1,
+            )
+
 
 def _knob_html(initial_value: int) -> str:
     return f"""
@@ -5210,6 +5349,39 @@ def trading_control_panel_page():
     if latest_alert and latest_alert.get("outcome_status") == "OPEN":
         direction = str(latest_alert.get("direction", "")).upper()
         alert_color = "#22c55e" if direction == "LONG" else "#ef4444" if direction == "SHORT" else "#f0c048"
+
+    if "tcp_seen_alerts_by_session" not in st.session_state:
+        st.session_state["tcp_seen_alerts_by_session"] = {}
+    seen_alerts = st.session_state["tcp_seen_alerts_by_session"]
+    if not isinstance(seen_alerts, dict):
+        seen_alerts = {}
+        st.session_state["tcp_seen_alerts_by_session"] = seen_alerts
+    current_identity = _alert_identity(latest_alert)
+    current_direction = str((latest_alert or {}).get("direction") or "").upper() if isinstance(latest_alert, dict) else ""
+    if current_identity:
+        session_key = str(session_id_tcp)
+        previous_identity = seen_alerts.get(session_key)
+        if previous_identity is None:
+            seen_alerts[session_key] = current_identity
+        elif previous_identity != current_identity:
+            seen_alerts[session_key] = current_identity
+            if current_direction in ("LONG", "SHORT"):
+                st.session_state["tcp_pending_alert_sound"] = {
+                    "session_id": int(session_id_tcp),
+                    "identity": current_identity,
+                }
+    pending_alert_sound = st.session_state.get("tcp_pending_alert_sound")
+    if (
+        isinstance(pending_alert_sound, dict)
+        and int(pending_alert_sound.get("session_id", -1)) == int(session_id_tcp)
+        and pending_alert_sound.get("identity") == current_identity
+    ):
+        _play_alert_sound(
+            sound_name=str(st.session_state.get("alert_sound_selected", "Pulse Bell")),
+            volume_percent=int(st.session_state.get("alert_sound_volume", 70)),
+            repeats=int(st.session_state.get("alert_sound_repeats", 10)),
+        )
+        st.session_state.pop("tcp_pending_alert_sound", None)
 
     alert_risky_html = ""
     if latest_alert and latest_alert.get("outcome_status") == "OPEN":
