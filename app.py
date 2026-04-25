@@ -1257,7 +1257,7 @@ with st.sidebar:
     if "nav_page" not in st.session_state:
         st.session_state["nav_page"] = "Trading Control Panel"
 
-    nav_pages = ["Trading Control Panel", "Session", "Provider", "Information"]
+    nav_pages = ["Trading Control Panel", "CMOS", "Session", "Provider", "Information"]
     for p in nav_pages:
         is_selected = st.session_state["nav_page"] == p
         if st.button(
@@ -5736,6 +5736,335 @@ style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;
             ):
                 _show_alert_evaluation_dialog(int(session_id_tcp))
 
+def cmos_page():
+    st.header("CMOS Trading UI")
+    st.caption("New UX layout using the same backend endpoints and logic.")
+
+    st.markdown(
+        """
+        <style>
+        .cmos-card { background: linear-gradient(180deg,#101a2b 0%, #0b1422 100%); border: 1px solid rgba(80,100,130,.45);
+            border-radius: 12px; padding: .75rem .8rem; min-height: 300px; }
+        .cmos-card h4 { margin: 0 0 .45rem 0; font-size: .95rem; color: #d7e3ff; }
+        .cmos-sub { color: #90a9d6; font-size: .78rem; margin-bottom: .55rem; }
+        .cmos-kpi { display:flex; gap:.65rem; margin:.35rem 0 .5rem 0; flex-wrap:wrap; }
+        .cmos-pill { font-size:.74rem; border:1px solid rgba(94,239,255,.35); border-radius:999px; padding:.15rem .5rem; color:#9be7ff; }
+        .cmos-bull { color:#22c55e; font-weight:700; }
+        .cmos-bear { color:#ef4444; font-weight:700; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    try:
+        sessions = api_client.list_sessions(limit=30, offset=0)
+    except Exception:
+        sessions = []
+
+    if not sessions:
+        st.info("No sessions available.")
+        return
+
+    session_options = {
+        int(s.get("id", 0)): f"#{int(s.get('id', 0))} {s.get('symbol', '—')} ({s.get('status', '—')})"
+        for s in sessions
+        if s.get("id") is not None
+    }
+    session_ids = list(session_options.keys()) or [1]
+
+    ctl_cols = st.columns([4, 1])
+    with ctl_cols[0]:
+        selected_session_id = st.selectbox(
+            "Session (for detail panels)",
+            options=session_ids,
+            format_func=lambda x: session_options.get(int(x), str(x)),
+            key="cmos_selected_session",
+        )
+    with ctl_cols[1]:
+        st.write("")
+        refresh_now = st.button("Refresh", key="cmos_refresh", use_container_width=True)
+
+    cmos_key = f"cmos_data_{int(selected_session_id)}"
+    if refresh_now or cmos_key not in st.session_state:
+        cmos_data: dict = {}
+        try:
+            cmos_data["panel"] = api_client.get_trading_control_panel(int(selected_session_id))
+        except Exception:
+            cmos_data["panel"] = {}
+        try:
+            cmos_data["session_detail"] = api_client.get_session(int(selected_session_id))
+        except Exception:
+            cmos_data["session_detail"] = {}
+        try:
+            cmos_data["alerts"] = api_client.list_alerts(limit=50, offset=0)
+        except Exception:
+            cmos_data["alerts"] = []
+        try:
+            cmos_data["viz"] = api_client.visualize_session(int(selected_session_id), 80)
+        except Exception:
+            cmos_data["viz"] = {}
+        try:
+            cmos_data["performance"] = api_client.get_alert_performance(int(selected_session_id))
+        except Exception:
+            cmos_data["performance"] = {}
+        try:
+            evals = api_client.list_alert_evaluations(int(selected_session_id), limit=1, offset=0)
+            cmos_data["latest_eval"] = evals[0] if isinstance(evals, list) and evals else {}
+        except Exception:
+            cmos_data["latest_eval"] = {}
+        try:
+            selected_session = next((s for s in sessions if int(s.get("id", -1)) == int(selected_session_id)), {}) or {}
+            symbol = str(selected_session.get("symbol") or "")
+            cmos_data["news"] = api_client.get_daily_news(symbol=symbol, lookback_hours=12) if symbol else {}
+        except Exception:
+            cmos_data["news"] = {}
+        st.session_state[cmos_key] = cmos_data
+
+    cmos_data = st.session_state.get(cmos_key, {})
+    panel = cmos_data.get("panel", {}) if isinstance(cmos_data, dict) else {}
+    session_detail = cmos_data.get("session_detail", {}) if isinstance(cmos_data, dict) else {}
+    alerts = cmos_data.get("alerts", []) if isinstance(cmos_data, dict) else []
+    viz = cmos_data.get("viz", {}) if isinstance(cmos_data, dict) else {}
+    performance = cmos_data.get("performance", {}) if isinstance(cmos_data, dict) else {}
+    latest_eval = cmos_data.get("latest_eval", {}) if isinstance(cmos_data, dict) else {}
+    news = cmos_data.get("news", {}) if isinstance(cmos_data, dict) else {}
+
+    latest_alert = panel.get("latest_alert") if isinstance(panel, dict) else {}
+    if not isinstance(latest_alert, dict):
+        latest_alert = {}
+    latest_alert_id = latest_alert.get("id")
+    alert_options = {}
+    if isinstance(alerts, list):
+        for a in alerts:
+            if not isinstance(a, dict) or a.get("id") is None:
+                continue
+            aid = int(a.get("id"))
+            alert_options[aid] = f"#{aid} {a.get('direction', '—')} {a.get('type', '—')} {a.get('entry_signal_price', '—')}"
+    if not alert_options and latest_alert_id is not None:
+        alert_options[int(latest_alert_id)] = f"#{int(latest_alert_id)} (latest)"
+
+    selected_alert_id = None
+    if alert_options:
+        chosen_default = int(latest_alert_id) if latest_alert_id in alert_options else list(alert_options.keys())[0]
+        selected_alert_id = st.selectbox(
+            "Alert (for detail card)",
+            options=list(alert_options.keys()),
+            index=list(alert_options.keys()).index(chosen_default),
+            format_func=lambda x: alert_options.get(int(x), str(x)),
+            key=f"cmos_selected_alert_{int(selected_session_id)}",
+        )
+    alert_detail = {}
+    if selected_alert_id is not None:
+        try:
+            alert_detail = api_client.get_alert(int(selected_alert_id))
+        except Exception:
+            alert_detail = next(
+                (a for a in alerts if isinstance(a, dict) and int(a.get("id", -1)) == int(selected_alert_id)),
+                {},
+            )
+
+    top = st.columns(5)
+    bottom = st.columns(5)
+
+    with top[0]:
+        with st.container(border=True):
+            st.markdown('<div class="cmos-card"><h4>1. Dashboard Overview</h4><div class="cmos-sub">Overview of current trading bot</div>', unsafe_allow_html=True)
+            state_bias = str((panel or {}).get("state_bias", "NEUTRAL")).upper()
+            vol = (panel or {}).get("latest_volatility_calculation", {}) or {}
+            trend = (panel or {}).get("trend_strenght", {}) or {}
+            st.markdown(
+                f'<div class="cmos-kpi"><span class="cmos-pill">ACTIVE BIAS: {state_bias}</span>'
+                f'<span class="cmos-pill">VOL: {str(vol.get("volatility_status", "NORMAL")).upper()}</span>'
+                f'<span class="cmos-pill">TREND: {str(trend.get("level", "WEAK")).upper()}</span></div>',
+                unsafe_allow_html=True,
+            )
+            metric_cols = st.columns(3)
+            metric_cols[0].metric("Total alerts", len(alerts) if isinstance(alerts, list) else 0)
+            metric_cols[1].metric("Win rate", f"{float(performance.get('win_rate', 0) or 0):.0f}%")
+            metric_cols[2].metric("P/L", str(performance.get("profit_factor") or "—"))
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    with top[1]:
+        with st.container(border=True):
+            st.markdown('<div class="cmos-card"><h4>2. Sessions Overview</h4><div class="cmos-sub">Market sessions status</div>', unsafe_allow_html=True)
+            for s in sessions[:4]:
+                sid = int(s.get("id", 0))
+                status = str(s.get("status", "—")).upper()
+                symbol = str(s.get("symbol", "—"))
+                bias = str(s.get("state_bias", "NEUTRAL")).upper()
+                st.markdown(
+                    f"**#{sid} {symbol}**  \n"
+                    f"Status: `{status}` | Bias: `{bias}` | Trend: `{str(s.get('trend_strength', '—')).upper()}`"
+                )
+                st.divider()
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    with top[2]:
+        with st.container(border=True):
+            st.markdown('<div class="cmos-card"><h4>3. Alert List</h4><div class="cmos-sub">All generated alerts</div>', unsafe_allow_html=True)
+            if isinstance(alerts, list) and alerts:
+                show_rows = []
+                for a in alerts[:8]:
+                    if not isinstance(a, dict):
+                        continue
+                    show_rows.append(
+                        {
+                            "Time": _fmt_dt(a.get("created_at")),
+                            "Dir": a.get("direction", "—"),
+                            "Symbol": a.get("symbol", "—"),
+                            "Type": a.get("type", "—"),
+                            "Entry": a.get("entry_signal_price", "—"),
+                            "Status": a.get("outcome_status", "—"),
+                        }
+                    )
+                st.dataframe(show_rows, use_container_width=True, hide_index=True)
+            else:
+                st.info("No alerts available.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    with top[3]:
+        with st.container(border=True):
+            st.markdown('<div class="cmos-card"><h4>4. Alert Detail</h4><div class="cmos-sub">Selected alert information</div>', unsafe_allow_html=True)
+            if isinstance(alert_detail, dict) and alert_detail:
+                direction = str(alert_detail.get("direction", "—")).upper()
+                cls = "cmos-bull" if direction == "LONG" else "cmos-bear" if direction == "SHORT" else ""
+                st.markdown(f'<div class="{cls}" style="font-size:1.25rem;">{direction}</div>', unsafe_allow_html=True)
+                st.metric("Entry", alert_detail.get("entry_signal_price", "—"))
+                ad_cols = st.columns(3)
+                ad_cols[0].metric("SL", alert_detail.get("stop_price", "—"))
+                ad_cols[1].metric("TP", alert_detail.get("target_price", "—"))
+                ad_cols[2].metric("Risk", alert_detail.get("risk_reward_ratio", "—"))
+                st.caption(
+                    f"Session: {alert_detail.get('session_id', '—')} | Status: {alert_detail.get('outcome_status', '—')}"
+                )
+            else:
+                st.info("No alert detail available.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    with top[4]:
+        with st.container(border=True):
+            st.markdown('<div class="cmos-card"><h4>5. Chart Analysis</h4><div class="cmos-sub">1m chart and ATR line</div>', unsafe_allow_html=True)
+            bars = viz.get("bars", []) if isinstance(viz, dict) else []
+            if bars:
+                import pandas as pd
+                import altair as alt
+
+                df = pd.DataFrame(bars)
+                if "date" in df.columns and "close" in df.columns:
+                    df["date"] = pd.to_datetime(df["date"], errors="coerce", utc=True)
+                    df["close"] = pd.to_numeric(df["close"], errors="coerce")
+                    cdf = df.dropna(subset=["date", "close"]).copy()
+                    if not cdf.empty:
+                        chart = alt.Chart(cdf).mark_line(color="#5cefff").encode(
+                            x=alt.X("date:T", scale=alt.Scale(type="utc"), title="Time"),
+                            y=alt.Y("close:Q", scale=alt.Scale(zero=False), title="Price"),
+                        )
+                        st.altair_chart(chart.properties(height=210), use_container_width=True)
+                    else:
+                        st.caption("No chart rows.")
+                else:
+                    st.caption("Chart payload missing date/close.")
+            else:
+                st.info("No chart data available.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    with bottom[0]:
+        with st.container(border=True):
+            st.markdown('<div class="cmos-card"><h4>Performance Analytics</h4><div class="cmos-sub">Analytics and statistics</div>', unsafe_allow_html=True)
+            if isinstance(performance, dict) and performance:
+                p1, p2, p3 = st.columns(3)
+                p1.metric("Total", int(performance.get("total_alerts", 0) or 0))
+                p2.metric("Win rate", f"{float(performance.get('win_rate', 0) or 0):.0f}%")
+                p3.metric("Avg R", performance.get("avg_r", "—"))
+                st.write(
+                    {
+                        "wins": performance.get("wins", 0),
+                        "losses": performance.get("losses", 0),
+                        "open": performance.get("open", 0),
+                    }
+                )
+            else:
+                st.info("No performance payload.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    with bottom[1]:
+        with st.container(border=True):
+            st.markdown('<div class="cmos-card"><h4>Settings</h4><div class="cmos-sub">Session configuration</div>', unsafe_allow_html=True)
+            if isinstance(session_detail, dict) and session_detail:
+                st.text_input("Instrument", value=str(session_detail.get("symbol", "")), disabled=True, key="cmos_set_symbol")
+                st.text_input(
+                    "Timeframe",
+                    value=str(session_detail.get("timeframe", "")),
+                    disabled=True,
+                    key="cmos_set_tf",
+                )
+                st.text_input(
+                    "Risk per trade",
+                    value=str(session_detail.get("risk_per_trade", "1.00")),
+                    disabled=True,
+                    key="cmos_set_risk",
+                )
+                st.text_input(
+                    "Trading hours",
+                    value=f"{session_detail.get('start_time', '07:00')} to {session_detail.get('end_time', '16:00')}",
+                    disabled=True,
+                    key="cmos_set_hours",
+                )
+            else:
+                st.info("No session settings available.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    with bottom[2]:
+        with st.container(border=True):
+            st.markdown('<div class="cmos-card"><h4>News & Calendar</h4><div class="cmos-sub">Market news and events</div>', unsafe_allow_html=True)
+            items = news.get("items", []) if isinstance(news, dict) else []
+            if isinstance(items, list) and items:
+                for item in items[:6]:
+                    if not isinstance(item, dict):
+                        continue
+                    headline = item.get("headline") or item.get("title") or "Untitled"
+                    source = item.get("source") or "—"
+                    st.markdown(f"- **{headline}**  \n  `{source}`")
+            else:
+                st.caption("No news items.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    with bottom[3]:
+        with st.container(border=True):
+            st.markdown('<div class="cmos-card"><h4>AI Alert Evaluation</h4><div class="cmos-sub">Evaluation for this alert</div>', unsafe_allow_html=True)
+            if isinstance(latest_eval, dict) and latest_eval:
+                score = latest_eval.get("score") or latest_eval.get("ai_score") or latest_eval.get("confidence_score") or "—"
+                conf = latest_eval.get("confidence") or latest_eval.get("confidence_label") or "—"
+                recommendation = latest_eval.get("recommendation") or latest_eval.get("decision") or "—"
+                st.metric("AI score", score)
+                st.metric("Confidence", conf)
+                st.metric("Recommendation", recommendation)
+                strengths = latest_eval.get("strengths")
+                if isinstance(strengths, list) and strengths:
+                    st.caption("Strengths: " + ", ".join([str(x) for x in strengths[:3]]))
+            else:
+                st.info("No evaluation yet.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    with bottom[4]:
+        with st.container(border=True):
+            st.markdown('<div class="cmos-card"><h4>1M Session Detail</h4><div class="cmos-sub">Selected session summary</div>', unsafe_allow_html=True)
+            if isinstance(session_detail, dict) and session_detail:
+                st.write(
+                    {
+                        "Symbol": session_detail.get("symbol", "—"),
+                        "Provider": session_detail.get("provider", "—"),
+                        "Status": session_detail.get("status", "—"),
+                        "Current Bias": session_detail.get("state_bias", "—"),
+                        "Trend": session_detail.get("trend_strength", "—"),
+                        "Volatility": session_detail.get("volatility_status", "—"),
+                    }
+                )
+            else:
+                st.info("No session detail available.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+
 def information_page():
     import html
     import json
@@ -6064,6 +6393,8 @@ def information_page():
 
 if page == "Trading Control Panel":
     trading_control_panel_page()
+elif page == "CMOS":
+    cmos_page()
 elif page == "Session":
     sessions_page()
 elif page == "Provider":
