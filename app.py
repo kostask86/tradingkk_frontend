@@ -5561,6 +5561,21 @@ def trading_control_panel_page():
 
             st.markdown(
                 f"""
+            <div class="tcp-panel">
+                <div class="tcp-panel-label">BREAKOUT STATUS</div>
+                <div style="height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.35rem;">
+                    <div style="font-size:0.78rem;font-weight:700;letter-spacing:0.06em;color:#cfd8e3;">STATE: {breakout_state}</div>
+                    <div style="font-size:0.76rem;font-weight:700;letter-spacing:0.06em;color:{breakout_dir_color};">DIRECTION: {breakout_direction}</div>
+                </div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
+
+        breakout_row_left, breakout_col_breakout, breakout_col_window, breakout_row_right = st.columns([2, 3, 3, 2])
+        with breakout_col_breakout:
+            st.markdown(
+                f"""
             <div class="tcp-panel tcp-panel-controls">
                 <div class="tcp-panel-label">CONTROLS</div>
                 <div style="height: 90px; display: flex; align-items: center; justify-content: center;">
@@ -5573,21 +5588,6 @@ def trading_control_panel_page():
                             TRADE MODE: {trade_mode_text}
                         </div>
                     </div>
-                </div>
-            </div>
-            """,
-                unsafe_allow_html=True,
-            )
-
-        breakout_row_left, breakout_col_breakout, breakout_col_window, breakout_row_right = st.columns([2, 3, 3, 2])
-        with breakout_col_breakout:
-            st.markdown(
-                f"""
-            <div class="tcp-panel">
-                <div class="tcp-panel-label">BREAKOUT STATUS</div>
-                <div style="height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.35rem;">
-                    <div style="font-size:0.78rem;font-weight:700;letter-spacing:0.06em;color:#cfd8e3;">STATE: {breakout_state}</div>
-                    <div style="font-size:0.76rem;font-weight:700;letter-spacing:0.06em;color:{breakout_dir_color};">DIRECTION: {breakout_direction}</div>
                 </div>
             </div>
             """,
