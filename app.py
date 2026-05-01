@@ -9,7 +9,6 @@ import wave
 import streamlit as st
 import streamlit.components.v1 as components
 import api_client
-from session_knob_component import render_session_knob
 from api_client import APIError
 from datetime import datetime, timezone
 import time
@@ -698,15 +697,15 @@ st.markdown(
             0 0 2px rgba(92, 239, 255, 0.22),
             0 1px 3px rgba(0,0,0,0.45);
     }
-    /* SESSION ID tile: match 140px siblings; kill Streamlit's fixed-height inner scroll */
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker) {
+    /* SESSION ID tile: match 140px siblings; avoid inner scrollbars */
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-id-marker) {
         overflow: hidden !important;
         min-height: 140px !important;
         max-height: 140px !important;
         height: 140px !important;
         box-sizing: border-box !important;
     }
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker) > div {
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-id-marker) > div {
         padding-top: 0.45rem !important;
         padding-bottom: 0.45rem !important;
         box-sizing: border-box !important;
@@ -714,52 +713,31 @@ st.markdown(
         overflow: visible !important;
         overflow-y: visible !important;
     }
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker) [data-testid="stVerticalBlock"] {
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-id-marker) [data-testid="stVerticalBlock"] {
         gap: 0 !important;
         min-height: 0 !important;
         overflow: visible !important;
         overflow-y: visible !important;
     }
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker) [data-testid="stElementContainer"] {
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-id-marker) [data-testid="stElementContainer"] {
         margin-bottom: 0 !important;
     }
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker)
-        [data-testid="stElementContainer"]:not(:has(iframe)) {
-        margin-top: 0 !important;
-    }
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker)
-        [data-testid="stElementContainer"]:has(iframe) {
-        margin-top: 1.4rem !important;
-    }
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker) iframe {
-        height: 48px !important;
-        min-height: 48px !important;
-        max-height: 48px !important;
-        width: 100% !important;
-        display: block !important;
-        border: none !important;
-        vertical-align: top !important;
-    }
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker)
-        [data-testid="stElementContainer"]:has(.tcp-sess-knob-session-num) {
+    /* Horizontal session radios: center the pill row inside the tile (radio widget defaults to stretch). */
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-id-marker) [data-testid="stHorizontalBlock"] {
         display: flex !important;
+        flex-wrap: nowrap !important;
         justify-content: center !important;
         width: 100% !important;
     }
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-knob-marker) .tcp-sess-knob-session-num {
-        text-align: center !important;
-        display: block !important;
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-id-marker) div[role="radiogroup"] {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        justify-content: center !important;
         width: 100% !important;
-        box-sizing: border-box !important;
-        margin: 0.1rem 0 0 0 !important;
-        padding: 0 !important;
-        line-height: 1.1 !important;
-        font-weight: 800 !important;
-        font-size: 0.95rem !important;
-        color: #5cefff !important;
-        letter-spacing: 0.06em !important;
-        font-variant-numeric: tabular-nums !important;
-        text-shadow: 0 0 8px rgba(92, 239, 255, 0.28) !important;
+        margin-inline: auto !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(#tcp-session-id-marker) label[data-baseweb="radio"] {
+        justify-content: center !important;
     }
     div:has(#tcp-rules-btn-marker) + div button {
         background: linear-gradient(180deg, #2a3f4d 0%, #1a2835 100%) !important;
@@ -5041,9 +5019,26 @@ def _show_alert_evaluation_dialog(default_master_sid: int) -> None:
 
 
 def trading_control_panel_page():
-    # Knob-selected session id is the single source of truth.
+    # Session picker (radio 1–5) stays in sync with `tcp_session_knob` for auto-refresh and API calls.
     if "tcp_session_knob" not in st.session_state:
         st.session_state["tcp_session_knob"] = 1
+    try:
+        _k = int(st.session_state["tcp_session_knob"])
+    except (TypeError, ValueError):
+        _k = 1
+    st.session_state["tcp_session_knob"] = max(1, min(5, _k))
+    st.session_state.pop("tcp_sess_knob_widget", None)
+
+    if "tcp_session_id_radio" not in st.session_state:
+        st.session_state["tcp_session_id_radio"] = int(st.session_state["tcp_session_knob"])
+    try:
+        _radio_sel = int(st.session_state["tcp_session_id_radio"])
+    except (TypeError, ValueError):
+        _radio_sel = int(st.session_state["tcp_session_knob"])
+    session_id_tcp = max(1, min(5, _radio_sel))
+    if session_id_tcp != _radio_sel:
+        st.session_state["tcp_session_id_radio"] = session_id_tcp
+    st.session_state["tcp_session_knob"] = session_id_tcp
 
     backend_ok = False
     try:
@@ -5052,16 +5047,6 @@ def trading_control_panel_page():
     except Exception:
         pass
 
-    _knob_w = st.session_state.get("tcp_sess_knob_widget")
-    if _knob_w is not None:
-        try:
-            knob_val = max(1, min(10, int(_knob_w)))
-        except (TypeError, ValueError):
-            knob_val = max(1, min(10, int(st.session_state.get("tcp_session_knob", 1))))
-    else:
-        knob_val = max(1, min(10, int(st.session_state.get("tcp_session_knob", 1))))
-    st.session_state["tcp_session_knob"] = knob_val
-    session_id_tcp = knob_val
     knob_changed = int(st.session_state.get("tcp_current_session_id") or 0) != int(session_id_tcp)
     if knob_changed:
         st.session_state["tcp_current_session_id"] = session_id_tcp
@@ -5108,6 +5093,37 @@ def trading_control_panel_page():
     status_text = "SYSTEM ONLINE" if backend_ok else "SYSTEM OFFLINE"
     freshness_class = "tcp-updated-line tcp-updated-line-refreshing" if need_fetch else "tcp-updated-line"
     freshness_text = "Refreshing data..." if need_fetch else last_fetch_label
+    session_detail_for_header = st.session_state.get("tcp_session_detail", {}) or {}
+    session_for_header = panel_data.get("session", {}) if isinstance(panel_data, dict) else {}
+    instrument_text = (
+        session_detail_for_header.get("symbol")
+        or session_detail_for_header.get("instrument")
+        or session_detail_for_header.get("instrument_name")
+        or session_detail_for_header.get("ticker")
+        or session_detail_for_header.get("asset")
+        or session_detail_for_header.get("name")
+        or session_for_header.get("symbol")
+        or session_for_header.get("instrument")
+        or session_for_header.get("instrument_name")
+        or session_for_header.get("ticker")
+        or session_for_header.get("asset")
+        or session_for_header.get("name")
+        or (panel_data.get("symbol") if isinstance(panel_data, dict) else None)
+        or (panel_data.get("instrument") if isinstance(panel_data, dict) else None)
+        or (panel_data.get("instrument_name") if isinstance(panel_data, dict) else None)
+        or (panel_data.get("ticker") if isinstance(panel_data, dict) else None)
+        or (panel_data.get("asset") if isinstance(panel_data, dict) else None)
+        or (panel_data.get("name") if isinstance(panel_data, dict) else None)
+        or "—"
+    )
+    timeframe_text = (
+        session_detail_for_header.get("timeframe")
+        or session_detail_for_header.get("tf")
+        or session_for_header.get("timeframe")
+        or session_for_header.get("tf")
+        or (tcp_cfg.get("timeframe") if isinstance(tcp_cfg, dict) else None)
+        or "—"
+    )
 
     st.markdown(
         f"""
@@ -5121,6 +5137,9 @@ def trading_control_panel_page():
                         <span class="tcp-status-text {status_class}">{status_text}</span>
                     </span>
                     <span class="{freshness_class}">{html.escape(freshness_text)}</span>
+                    <span style="font-size:0.68rem;color:#9ec3d6;letter-spacing:0.03em;">
+                        INSTRUMENT: {html.escape(str(instrument_text))} | TF: {html.escape(str(timeframe_text))}
+                    </span>
                 </div>
             </div>
         </div>
@@ -5618,15 +5637,20 @@ def trading_control_panel_page():
             # gap=None: default "small" gap stacks ~1rem between every child and blows past height=140 → scrollbar.
             with st.container(border=True, height=140, gap=None):
                 st.markdown(
-                    '<div class="tcp-quick-subpanel-label" style="margin:0 0 1.7rem 0;line-height:1.25;text-align:center;position:relative;z-index:1;">SESSION ID</div>'
-                    '<span id="tcp-session-knob-marker" aria-hidden="true"></span>',
+                    '<div class="tcp-quick-subpanel-label" style="margin:0 0 0.55rem 0;line-height:1.25;text-align:center;position:relative;z-index:1;">SESSION ID</div>'
+                    '<span id="tcp-session-id-marker" aria-hidden="true"></span>',
                     unsafe_allow_html=True,
                 )
-                render_session_knob(knob_val, key="tcp_sess_knob_widget", height=48)
-                st.markdown(
-                    f'<div class="tcp-sess-knob-session-num" style="text-align:center;width:100%;display:block;box-sizing:border-box;">{knob_val}</div>',
-                    unsafe_allow_html=True,
-                )
+                _, _sess_pick, _ = st.columns([12, 76, 12], gap=None)
+                with _sess_pick:
+                    with st.container(horizontal=True, horizontal_alignment="center", gap=None):
+                        st.radio(
+                            "Session ID",
+                            options=[1, 2, 3, 4, 5],
+                            horizontal=True,
+                            key="tcp_session_id_radio",
+                            label_visibility="collapsed",
+                        )
         with qc2:
             with st.container(border=True, height=140):
                 st.markdown('<div class="tcp-quick-subpanel-label">ALERT FREEZE</div>', unsafe_allow_html=True)
