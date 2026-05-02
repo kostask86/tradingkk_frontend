@@ -437,6 +437,14 @@ st.markdown(
         border-radius: 999px;
         padding: 0.2rem 0.55rem;
     }
+    .tcp-trend-pressure {
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        color: #9ec3d6;
+        text-align: center;
+        line-height: 1.2;
+    }
     .tcp-trend-bars {
         display: flex;
         gap: 0.2rem;
@@ -909,6 +917,17 @@ def _fmt_dt(val) -> str:
         return str(val)
 
 
+def _fmt_score_0_100(val: object) -> str:
+    """Format a numeric score expected in 0–100; missing/invalid → em dash."""
+    if val is None:
+        return "—"
+    try:
+        n = int(round(float(val)))
+        return str(max(0, min(100, n)))
+    except (TypeError, ValueError):
+        return "—"
+
+
 def _tcp_alert_risky_bool(alert: dict | None) -> bool | None:
     if not isinstance(alert, dict):
         return None
@@ -1363,10 +1382,38 @@ def sessions_page():
                 df = pd.DataFrame(st.session_state["bias_calculations_list"])
                 if "calculated_at" in df.columns:
                     df["calculated_at"] = df["calculated_at"].apply(_fmt_dt)
+                _seen = set()
+                _ordered: list = []
+                for c in [
+                    "id",
+                    "session_id",
+                    "calculated_at",
+                    "ma_bar_bias",
+                    "ma_persistent_bias",
+                    "structure_bias",
+                    "strenght",
+                    "trend_pressure_score",
+                    "candidate_bias",
+                    "state_bias",
+                ]:
+                    if c in df.columns and c not in _seen:
+                        _ordered.append(c)
+                        _seen.add(c)
+                for c in df.columns:
+                    if c not in _seen:
+                        _ordered.append(c)
+                df = df[_ordered]
 
                 bias_columns = [
                     col
-                    for col in ["ma_bar_bias", "ma_persistent_bias", "structure_bias", "strenght", "candidate_bias", "state_bias"]
+                    for col in [
+                        "ma_bar_bias",
+                        "ma_persistent_bias",
+                        "structure_bias",
+                        "strenght",
+                        "candidate_bias",
+                        "state_bias",
+                    ]
                     if col in df.columns
                 ]
 
@@ -1389,7 +1436,7 @@ def sessions_page():
         if "bias_calculation_detail" in st.session_state:
             detail = st.session_state["bias_calculation_detail"]
             st.markdown("**Bias Calculation Detail**")
-            bias_cols = st.columns(5)
+            bias_cols = st.columns(6)
             with bias_cols[0]:
                 st.markdown(
                     f"**MA Bar Bias**<br>{_bias_colored_html(detail.get('ma_bar_bias', 'NEUTRAL'))}",
@@ -1411,6 +1458,8 @@ def sessions_page():
                     unsafe_allow_html=True,
                 )
             with bias_cols[4]:
+                st.metric("Trend pressure (0–100)", _fmt_score_0_100(detail.get("trend_pressure_score")))
+            with bias_cols[5]:
                 st.markdown(
                     f"**Candidate Bias**<br>{_bias_colored_html(detail.get('candidate_bias', 'NEUTRAL'))}",
                     unsafe_allow_html=True,
@@ -2017,7 +2066,7 @@ def sessions_page():
 
                 latest_bias = data.get("latest_bias_calculation")
                 if latest_bias:
-                    lb_cols = st.columns(5)
+                    lb_cols = st.columns(6)
                     with lb_cols[0]:
                         st.markdown(
                             f"**MA Bar Bias**<br>{_bias_colored_html(latest_bias.get('ma_bar_bias', 'NEUTRAL'))}",
@@ -2039,6 +2088,8 @@ def sessions_page():
                             unsafe_allow_html=True,
                         )
                     with lb_cols[4]:
+                        st.metric("Trend pressure (0–100)", _fmt_score_0_100(latest_bias.get("trend_pressure_score")))
+                    with lb_cols[5]:
                         st.metric("Bull / Bear Count", f"{latest_bias.get('bull_count', 0)} / {latest_bias.get('bear_count', 0)}")
 
                 # Pullback status panel.
@@ -3895,6 +3946,7 @@ def provider_page():
                 st.metric("Bull Count", cb_data.get("bull_count", 0))
             with count_cols[1]:
                 st.metric("Bear Count", cb_data.get("bear_count", 0))
+            st.metric("Trend pressure (0–100)", _fmt_score_0_100(cb_data.get("trend_pressure_score")))
 
             bars = cb_data.get("bars", [])
             swings = cb_data.get("swings", [])
@@ -5461,6 +5513,14 @@ def trading_control_panel_page():
     trend_bar_2 = trend_bar_active_class if trend_level_count >= 2 else ""
     trend_bar_3 = trend_bar_active_class if trend_level_count >= 3 else ""
 
+    latest_bias_tcp = (panel_data or {}).get("latest_bias_calculation") or {}
+    trend_pressure_display = _fmt_score_0_100(latest_bias_tcp.get("trend_pressure_score"))
+    trend_pressure_line = (
+        f"TREND PRESSURE: {html.escape(trend_pressure_display)} / 100"
+        if trend_pressure_display != "—"
+        else "TREND PRESSURE: —"
+    )
+
     bias_arrow_class = f"tcp-bias-arrow-{state_bias.lower()}"
     bias_label_class = f"tcp-bias-{state_bias.lower()}"
 
@@ -5526,6 +5586,7 @@ def trading_control_panel_page():
                 <div class="tcp-trend-wrap">
                     <div class="tcp-trend-direction {trend_dir_class}">{trend_direction}</div>
                     <div class="tcp-trend-level-badge">{trend_level}</div>
+                    <div class="tcp-trend-pressure">{trend_pressure_line}</div>
                     <div class="tcp-trend-bars">
                         <span class="tcp-trend-bar {trend_bar_1}"></span>
                         <span class="tcp-trend-bar {trend_bar_2}"></span>
