@@ -13,6 +13,13 @@ from api_client import APIError
 from datetime import datetime, timezone
 import time
 
+APP_NAME = "KK Trading"
+APP_LOGO_PATH = (
+    "/Users/konstantinoskonstantelos/.cursor/projects/"
+    "Users-konstantinoskonstantelos-Documents-tradingkk-frontend/assets/"
+    "tradingkklogo-c83aa2c4-0ef3-4856-b16d-8ec184c44ec7.png"
+)
+
 TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h"]
 PROVIDERS = ["IBKR", "BYBIT"]
 ALERT_STATUSES = ["OPEN", "TP_HIT", "SL_HIT", "CANCELED"]
@@ -32,7 +39,7 @@ TIMEFRAME_REFRESH_SECONDS = {
     "4h": 14400,
 }
 
-st.set_page_config(page_title="TradingKK", page_icon="📈", layout="wide")
+st.set_page_config(page_title=APP_NAME, page_icon="📈", layout="wide")
 
 # ── Custom CSS ────────────────────────────────────────────────────────
 
@@ -901,6 +908,17 @@ st.markdown(
         border-radius: 3px;
         outline: none;
     }
+    /* Make selected sidebar nav button subtle (avoid bright red primary). */
+    div[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+        background: linear-gradient(180deg, #1b1b1b 0%, #101010 100%) !important;
+        color: #e8eaed !important;
+        border: 1px solid rgba(180, 180, 180, 0.35) !important;
+        box-shadow: none !important;
+    }
+    div[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
+        background: linear-gradient(180deg, #232323 0%, #151515 100%) !important;
+        border-color: rgba(220, 220, 220, 0.45) !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -1238,17 +1256,13 @@ def _visualize_auto_refresh_fragment(show_caption: bool = False) -> None:
 # ── Sidebar ───────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.title("📈 TradingKK")
-    st.caption("Trading session manager")
-    st.divider()
-
-    backend_ok = False
-    try:
-        api_client.health_check()
-        backend_ok = True
-        st.success("Backend connected")
-    except Exception:
-        st.error("Backend unreachable (localhost:8000)")
+    logo_col, title_col = st.columns([1, 4], vertical_alignment="center")
+    with logo_col:
+        if os.path.exists(APP_LOGO_PATH):
+            st.image(APP_LOGO_PATH, use_container_width=True)
+    with title_col:
+        st.markdown(f"### {APP_NAME}")
+        st.caption("Trading session manager")
 
     st.divider()
     if "nav_page" not in st.session_state:
@@ -1258,10 +1272,10 @@ with st.sidebar:
     for p in nav_pages:
         is_selected = st.session_state["nav_page"] == p
         if st.button(
-            p,
+            f"• {p}" if is_selected else p,
             key=f"nav_{p}",
             use_container_width=True,
-            type="primary" if is_selected else "secondary",
+            type="secondary",
         ):
             st.session_state["nav_page"] = p
             st.rerun()
