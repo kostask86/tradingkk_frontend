@@ -13,6 +13,13 @@ from api_client import APIError
 from datetime import datetime, timezone
 import time
 
+APP_NAME = "KK Tradiing"
+APP_LOGO_PATH = (
+    "/Users/konstantinoskonstantelos/.cursor/projects/"
+    "Users-konstantinoskonstantelos-Documents-tradingkk-frontend/assets/"
+    "tradingkklogo-a48e3b8c-7410-4c7a-be2b-241c7a375c3d.png"
+)
+
 TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h"]
 PROVIDERS = ["IBKR", "BYBIT"]
 ALERT_STATUSES = ["OPEN", "TP_HIT", "SL_HIT", "CANCELED"]
@@ -32,7 +39,7 @@ TIMEFRAME_REFRESH_SECONDS = {
     "4h": 14400,
 }
 
-st.set_page_config(page_title="TradingKK", page_icon="📈", layout="wide")
+st.set_page_config(page_title=APP_NAME, page_icon="📈", layout="wide")
 
 # ── Custom CSS ────────────────────────────────────────────────────────
 
@@ -94,20 +101,20 @@ st.markdown(
         display: flex;
         align-items: center;
         justify-content: space-between;
-        background: linear-gradient(180deg, #2a2d35 0%, #1a1d24 100%);
-        border: 1px solid rgba(80, 85, 95, 0.8);
+        background: linear-gradient(180deg, #161016 0%, #070707 100%);
+        border: 1px solid rgba(255, 159, 207, 0.42);
         border-radius: 8px;
         padding: 1rem 1.5rem;
         margin-bottom: 1.5rem;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.4);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 0 14px rgba(255, 159, 207, 0.18);
     }
     .tcp-title {
         font-family: 'Segoe UI', 'Roboto', 'Oswald', 'Arial Black', sans-serif;
         font-size: 1.6rem;
         font-weight: 800;
         letter-spacing: 0.12em;
-        color: #f0c048;
-        text-shadow: 0 0 12px rgba(240, 192, 72, 0.5);
+        color: #ff9fcf;
+        text-shadow: 0 0 12px rgba(255, 159, 207, 0.42);
     }
     .tcp-status {
         display: flex;
@@ -134,25 +141,15 @@ st.markdown(
     .tcp-led-pulse {
         animation: tcp-led-pulse 1.05s ease-in-out infinite;
     }
-    .tcp-led-online {
-        background: #22c55e;
-        box-shadow: 0 0 8px #22c55e, 0 0 16px rgba(34, 197, 94, 0.6);
-    }
-    .tcp-led-offline {
-        background: #ef4444;
-        box-shadow: 0 0 8px #ef4444, 0 0 16px rgba(239, 68, 68, 0.6);
-    }
+    .tcp-led-online { background: #ff9fcf; box-shadow: 0 0 8px #ff9fcf, 0 0 16px rgba(255, 159, 207, 0.6); }
+    .tcp-led-offline { background: #b86f97; box-shadow: 0 0 8px #b86f97, 0 0 16px rgba(184, 111, 151, 0.6); }
     .tcp-status-text {
         font-size: 0.75rem;
         font-weight: 700;
         letter-spacing: 0.08em;
     }
-    .tcp-status-online {
-        color: #22c55e;
-    }
-    .tcp-status-offline {
-        color: #ef4444;
-    }
+    .tcp-status-online { color: #ffb8dc; }
+    .tcp-status-offline { color: #d59abc; }
     .tcp-updated-line {
         font-size: 0.67rem;
         font-weight: 600;
@@ -160,10 +157,7 @@ st.markdown(
         color: #9aa0a6;
         white-space: nowrap;
     }
-    .tcp-updated-line-refreshing {
-        color: #7dd3fc;
-        text-shadow: 0 0 8px rgba(125, 211, 252, 0.35);
-    }
+    .tcp-updated-line-refreshing { color: #ffc7e3; text-shadow: 0 0 8px rgba(255, 199, 227, 0.35); }
     @keyframes tcp-led-pulse {
         0% { transform: scale(1); opacity: 0.86; }
         50% { transform: scale(1.18); opacity: 1; }
@@ -177,12 +171,12 @@ st.markdown(
         margin-bottom: 1.5rem;
     }
     .tcp-panel {
-        background: linear-gradient(180deg, #252830 0%, #1a1d24 100%);
-        border: 1px solid rgba(70, 75, 85, 0.8);
+        background: linear-gradient(180deg, #140d14 0%, #060606 100%);
+        border: 1px solid rgba(255, 159, 207, 0.28);
         border-radius: 10px;
         padding: 1rem;
         margin-bottom: 1rem;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.3);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 0 10px rgba(255, 159, 207, 0.12);
         min-height: 190px;
         height: 190px;
         display: flex;
@@ -192,7 +186,7 @@ st.markdown(
         font-size: 0.7rem;
         font-weight: 700;
         letter-spacing: 0.1em;
-        color: #888;
+        color: #ffc7e3;
         margin-bottom: 0.5rem;
         text-align: center;
     }
@@ -208,15 +202,7 @@ st.markdown(
         height: 84px;
         position: relative;
         border-radius: 150px 150px 0 0;
-        background: linear-gradient(
-            90deg,
-            #ef4444 0%,
-            #ef4444 33.33%,
-            #9aa0a6 33.33%,
-            #9aa0a6 66.66%,
-            #22c55e 66.66%,
-            #22c55e 100%
-        );
+        background: linear-gradient(90deg, #8f5f77 0%, #b77ea0 33.33%, #ff9fcf 66.66%, #ffd4ea 100%);
         border: 1px solid rgba(120, 130, 150, 0.35);
         box-shadow: inset 0 2px 8px rgba(0,0,0,0.45), 0 2px 10px rgba(0,0,0,0.28);
         overflow: hidden;
@@ -277,9 +263,9 @@ st.markdown(
         border-bottom: 8px solid currentColor;
         filter: drop-shadow(0 0 3px currentColor);
     }
-    .tcp-bias-arrow-bearish { transform: translateX(-50%) rotate(-62deg); color: #ef4444; }
-    .tcp-bias-arrow-neutral { transform: translateX(-50%) rotate(0deg); color: #9aa0a6; }
-    .tcp-bias-arrow-bullish { transform: translateX(-50%) rotate(62deg); color: #22c55e; }
+    .tcp-bias-arrow-bearish { transform: translateX(-50%) rotate(-62deg); color: #d090b2; }
+    .tcp-bias-arrow-neutral { transform: translateX(-50%) rotate(0deg); color: #ffb8dc; }
+    .tcp-bias-arrow-bullish { transform: translateX(-50%) rotate(62deg); color: #ffd4ea; }
     .tcp-bias-label {
         text-align: center;
         font-size: 0.9rem;
@@ -287,9 +273,9 @@ st.markdown(
         letter-spacing: 0.05em;
         margin-top: 0.25rem;
     }
-    .tcp-bias-bullish { color: #22c55e; }
-    .tcp-bias-bearish { color: #ef4444; }
-    .tcp-bias-neutral { color: #9aa0a6; }
+    .tcp-bias-bullish { color: #ffd4ea; }
+    .tcp-bias-bearish { color: #d090b2; }
+    .tcp-bias-neutral { color: #ffb8dc; }
     .tcp-pb-gauge-wrap {
         width: 100%;
         min-height: 96px;
@@ -302,15 +288,7 @@ st.markdown(
         height: 84px;
         position: relative;
         border-radius: 150px 150px 0 0;
-        background: linear-gradient(
-            90deg,
-            #ef4444 0%,
-            #ef4444 33.33%,
-            #f0ad4e 33.33%,
-            #f0ad4e 66.66%,
-            #3b82f6 66.66%,
-            #3b82f6 100%
-        );
+        background: linear-gradient(90deg, #8f5f77 0%, #b77ea0 33.33%, #ff9fcf 66.66%, #ffd4ea 100%);
         border: 1px solid rgba(120, 130, 150, 0.35);
         box-shadow: inset 0 2px 8px rgba(0,0,0,0.45), 0 2px 10px rgba(0,0,0,0.28);
         overflow: hidden;
@@ -368,9 +346,9 @@ st.markdown(
         border-bottom: 8px solid currentColor;
         filter: drop-shadow(0 0 3px currentColor);
     }
-    .tcp-pb-arrow-invalid { transform: translateX(-50%) rotate(-62deg); color: #ef4444; }
-    .tcp-pb-arrow-ready { transform: translateX(-50%) rotate(0deg); color: #f0ad4e; }
-    .tcp-pb-arrow-forming { transform: translateX(-50%) rotate(62deg); color: #3b82f6; }
+    .tcp-pb-arrow-invalid { transform: translateX(-50%) rotate(-62deg); color: #d090b2; }
+    .tcp-pb-arrow-ready { transform: translateX(-50%) rotate(0deg); color: #ff9fcf; }
+    .tcp-pb-arrow-forming { transform: translateX(-50%) rotate(62deg); color: #ffd4ea; }
     .tcp-pb-label {
         text-align: center;
         font-size: 0.85rem;
@@ -378,10 +356,10 @@ st.markdown(
         letter-spacing: 0.05em;
         margin-top: 0.25rem;
     }
-    .tcp-pb-label-invalid { color: #ef4444; }
-    .tcp-pb-label-ready { color: #f0ad4e; }
-    .tcp-pb-label-forming { color: #3b82f6; }
-    .tcp-pb-label-none { color: #9aa0a6; }
+    .tcp-pb-label-invalid { color: #d090b2; }
+    .tcp-pb-label-ready { color: #ff9fcf; }
+    .tcp-pb-label-forming { color: #ffd4ea; }
+    .tcp-pb-label-none { color: #ffc7e3; }
     .tcp-vol-lights {
         display: flex;
         justify-content: center;
@@ -393,20 +371,20 @@ st.markdown(
         height: 16px;
         border-radius: 50%;
     }
-    .tcp-vol-light-low { background: #3b82f6; }
-    .tcp-vol-light-normal { background: #f59e0b; }
-    .tcp-vol-light-elevated { background: #22c55e; }
-    .tcp-vol-light-high { background: #ef4444; }
+    .tcp-vol-light-low { background: #8f5f77; }
+    .tcp-vol-light-normal { background: #b77ea0; }
+    .tcp-vol-light-elevated { background: #ff9fcf; }
+    .tcp-vol-light-high { background: #ffd4ea; }
     .tcp-vol-light-active { box-shadow: 0 0 10px currentColor, 0 0 20px currentColor; }
-    .tcp-vol-light-low.tcp-vol-light-active { color: #3b82f6; }
-    .tcp-vol-light-normal.tcp-vol-light-active { color: #f59e0b; }
-    .tcp-vol-light-elevated.tcp-vol-light-active { color: #22c55e; }
-    .tcp-vol-light-high.tcp-vol-light-active { color: #ef4444; }
+    .tcp-vol-light-low.tcp-vol-light-active { color: #8f5f77; }
+    .tcp-vol-light-normal.tcp-vol-light-active { color: #b77ea0; }
+    .tcp-vol-light-elevated.tcp-vol-light-active { color: #ff9fcf; }
+    .tcp-vol-light-high.tcp-vol-light-active { color: #ffd4ea; }
     .tcp-vol-data {
         font-size: 0.75rem;
         font-weight: 700;
         letter-spacing: 0.05em;
-        color: #f0c048;
+        color: #ffc7e3;
         text-align: center;
     }
     .tcp-trend-wrap {
@@ -423,17 +401,17 @@ st.markdown(
         letter-spacing: 0.06em;
         text-transform: uppercase;
     }
-    .tcp-trend-direction-bullish { color: #22c55e; text-shadow: 0 0 10px rgba(34,197,94,0.45); }
-    .tcp-trend-direction-bearish { color: #ef4444; text-shadow: 0 0 10px rgba(239,68,68,0.45); }
-    .tcp-trend-direction-neutral { color: #9aa0a6; }
+    .tcp-trend-direction-bullish { color: #ffd4ea; text-shadow: 0 0 10px rgba(255,212,234,0.45); }
+    .tcp-trend-direction-bearish { color: #d090b2; text-shadow: 0 0 10px rgba(208,144,178,0.45); }
+    .tcp-trend-direction-neutral { color: #ffb8dc; }
     .tcp-trend-level-badge {
         font-size: 0.66rem;
         font-weight: 800;
         letter-spacing: 0.09em;
         text-transform: uppercase;
-        color: #d5d9e0;
-        background: rgba(0,0,0,0.35);
-        border: 1px solid rgba(100,110,130,0.7);
+        color: #ffd4ea;
+        background: rgba(255,159,207,0.1);
+        border: 1px solid rgba(255,159,207,0.45);
         border-radius: 999px;
         padding: 0.2rem 0.55rem;
     }
@@ -441,7 +419,7 @@ st.markdown(
         font-size: 0.62rem;
         font-weight: 700;
         letter-spacing: 0.07em;
-        color: #9ec3d6;
+        color: #ffc7e3;
         text-align: center;
         line-height: 1.2;
     }
@@ -453,12 +431,12 @@ st.markdown(
         width: 16px;
         height: 6px;
         border-radius: 2px;
-        background: #3a3f4a;
-        border: 1px solid rgba(130,140,160,0.35);
+        background: #1b1319;
+        border: 1px solid rgba(255,159,207,0.35);
     }
-    .tcp-trend-bar-active-bullish { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.55); }
-    .tcp-trend-bar-active-bearish { background: #ef4444; box-shadow: 0 0 8px rgba(239,68,68,0.55); }
-    .tcp-trend-bar-active-neutral { background: #9aa0a6; box-shadow: 0 0 6px rgba(154,160,166,0.45); }
+    .tcp-trend-bar-active-bullish { background: #ffd4ea; box-shadow: 0 0 8px rgba(255,212,234,0.55); }
+    .tcp-trend-bar-active-bearish { background: #d090b2; box-shadow: 0 0 8px rgba(208,144,178,0.55); }
+    .tcp-trend-bar-active-neutral { background: #ffb8dc; box-shadow: 0 0 6px rgba(255,184,220,0.45); }
     .tcp-control-row {
         display: flex;
         align-items: center;
@@ -474,7 +452,7 @@ st.markdown(
         font-size: 0.7rem;
         font-weight: 700;
         letter-spacing: 0.08em;
-        color: #888;
+        color: #ffc7e3;
         min-width: 72px;
     }
     .tcp-session-status {
@@ -483,42 +461,36 @@ st.markdown(
         gap: 0.6rem;
         margin-top: 0.9rem;
         padding: 0.55rem 0.85rem;
-        background: rgba(0,0,0,0.35);
+        background: rgba(255,159,207,0.08);
         border-radius: 8px;
-        border: 1px solid rgba(70,75,85,0.6);
+        border: 1px solid rgba(255,159,207,0.3);
     }
     .tcp-session-led {
         width: 10px;
         height: 10px;
         border-radius: 50%;
     }
-    .tcp-session-led-active { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
-    .tcp-session-led-paused { background: #f0ad4e; box-shadow: 0 0 8px #f0ad4e; }
-    .tcp-session-led-completed { background: #6c757d; box-shadow: 0 0 6px #6c757d; }
-    .tcp-session-led-none { background: #555; }
+    .tcp-session-led-active { background: #ffd4ea; box-shadow: 0 0 8px #ffd4ea; }
+    .tcp-session-led-paused { background: #ff9fcf; box-shadow: 0 0 8px #ff9fcf; }
+    .tcp-session-led-completed { background: #b77ea0; box-shadow: 0 0 6px #b77ea0; }
+    .tcp-session-led-none { background: #4a2d3d; }
     .tcp-freeze-light {
         width: 14px;
         height: 14px;
         border-radius: 50%;
         display: inline-block;
     }
-    .tcp-freeze-light-on {
-        background: #3ab8ff;
-        box-shadow: 0 0 10px #3ab8ff, 0 0 18px rgba(58, 184, 255, 0.65);
-    }
-    .tcp-freeze-light-off {
-        background: #666;
-        box-shadow: 0 0 4px rgba(130, 130, 130, 0.35);
-    }
+    .tcp-freeze-light-on { background: #ff9fcf; box-shadow: 0 0 10px #ff9fcf, 0 0 18px rgba(255, 159, 207, 0.65); }
+    .tcp-freeze-light-off { background: #4a2d3d; box-shadow: 0 0 4px rgba(74, 45, 61, 0.45); }
     .tcp-session-status-text {
         font-size: 0.8rem;
         font-weight: 700;
         letter-spacing: 0.05em;
     }
-    .tcp-session-status-active { color: #22c55e; }
-    .tcp-session-status-paused { color: #f0ad4e; }
-    .tcp-session-status-completed { color: #9aa0a6; }
-    .tcp-session-status-none { color: #666; }
+    .tcp-session-status-active { color: #ffd4ea; }
+    .tcp-session-status-paused { color: #ff9fcf; }
+    .tcp-session-status-completed { color: #b77ea0; }
+    .tcp-session-status-none { color: #8f5f77; }
     .tcp-alert-status-body {
         min-height: 90px;
         display: flex;
@@ -552,20 +524,20 @@ st.markdown(
         border: 1px solid rgba(120,130,150,0.45);
     }
     .tcp-risk-pill-risky {
-        color: #fff7ed;
-        background: linear-gradient(180deg, #c2410c 0%, #9a3412 100%);
-        border-color: rgba(251, 146, 60, 0.55);
-        box-shadow: 0 0 10px rgba(194, 65, 12, 0.45);
+        color: #fff0f8;
+        background: linear-gradient(180deg, #cc7ba7 0%, #a45e87 100%);
+        border-color: rgba(255, 181, 220, 0.55);
+        box-shadow: 0 0 10px rgba(204, 123, 167, 0.45);
     }
     .tcp-risk-pill-safe {
-        color: #bbf7d0;
-        background: rgba(34, 197, 94, 0.14);
-        border-color: rgba(34, 197, 94, 0.5);
+        color: #ffdff0;
+        background: rgba(255, 159, 207, 0.16);
+        border-color: rgba(255, 159, 207, 0.5);
     }
     .tcp-risk-pill-unknown {
-        color: #9aa0a6;
-        background: rgba(0,0,0,0.25);
-        border-color: rgba(100,110,130,0.4);
+        color: #d6a5c2;
+        background: rgba(255,159,207,0.08);
+        border-color: rgba(255,159,207,0.28);
     }
     .tcp-controls-inner {
         padding-top: 0.25rem;
@@ -641,8 +613,8 @@ st.markdown(
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 0 10px rgba(255, 129, 102, 0.3) !important;
     }
     .tcp-master-panel {
-        background: rgba(20, 22, 28, 0.6);
-        border: 1px solid rgba(70, 75, 85, 0.6);
+        background: rgba(18, 10, 16, 0.6);
+        border: 1px solid rgba(255, 159, 207, 0.28);
         border-radius: 12px;
         padding: 1rem;
         margin-bottom: 1.5rem;
@@ -651,7 +623,7 @@ st.markdown(
         font-size: 0.7rem;
         font-weight: 700;
         letter-spacing: 0.1em;
-        color: #888;
+        color: #ffc7e3;
         margin-bottom: 0.5rem;
         text-align: center;
     }
@@ -835,8 +807,8 @@ st.markdown(
         min-height: 128px;
     }
     .tcp-knob-panel {
-        background: linear-gradient(180deg, #252830 0%, #1a1d24 100%);
-        border: 1px solid rgba(70, 75, 85, 0.8);
+        background: linear-gradient(180deg, #140d14 0%, #060606 100%);
+        border: 1px solid rgba(255, 159, 207, 0.28);
         border-radius: 10px;
         padding: 1rem 1.5rem;
         margin-bottom: 1rem;
@@ -849,7 +821,7 @@ st.markdown(
         font-size: 0.7rem;
         font-weight: 700;
         letter-spacing: 0.1em;
-        color: #888;
+        color: #ffc7e3;
         margin-bottom: 0.5rem;
         text-align: center;
     }
@@ -900,6 +872,112 @@ st.markdown(
         background: #1a1d24;
         border-radius: 3px;
         outline: none;
+    }
+    .kk-logo-title-wrap {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 0.2rem;
+    }
+    .kk-title {
+        font-size: 1.55rem;
+        font-weight: 800;
+        color: #ff9fcf;
+        letter-spacing: 0.03em;
+        line-height: 1.1;
+        margin: 0;
+    }
+    .kk-subtitle {
+        color: #ffc7e3;
+        font-size: 0.8rem;
+        margin-bottom: 0.2rem;
+    }
+
+    /* Global palette override: black + light pink */
+    :root {
+        --kk-bg: #000000;
+        --kk-bg-soft: #0a0a0a;
+        --kk-pink: #ff9fcf;
+        --kk-pink-soft: #ffc7e3;
+        --kk-text: #e8eaed;
+    }
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+        background: var(--kk-bg) !important;
+        color: var(--kk-text) !important;
+    }
+    div[data-testid="stSidebar"] {
+        background: var(--kk-bg-soft) !important;
+        border-right: 1px solid rgba(255, 159, 207, 0.35);
+    }
+    h1, h2, h3, h4, h5, h6, p, label, span, div, .stMarkdown, .stCaption {
+        color: var(--kk-text);
+    }
+    a, .st-emotion-cache-10trblm, .st-emotion-cache-16idsys {
+        color: #e8eaed !important;
+    }
+    .stButton > button, .stDownloadButton > button, .stForm button {
+        background: linear-gradient(180deg, #101010 0%, #050505 100%) !important;
+        color: #e8eaed !important;
+        border: 1px solid rgba(255, 207, 230, 0.7) !important;
+        font-weight: 700 !important;
+    }
+    .stButton > button:hover, .stDownloadButton > button:hover, .stForm button:hover {
+        background: linear-gradient(180deg, #171717 0%, #0b0b0b 100%) !important;
+        box-shadow: 0 0 12px rgba(255, 159, 207, 0.38) !important;
+    }
+    [data-baseweb="select"] > div,
+    .stTextInput > div > div > input,
+    .stNumberInput input,
+    .stTextArea textarea,
+    div[data-baseweb="input"] input {
+        background: #090909 !important;
+        color: var(--kk-pink-soft) !important;
+        border: 1px solid rgba(255, 159, 207, 0.45) !important;
+    }
+    .stMetric {
+        background: #080808 !important;
+        border: 1px solid rgba(255, 159, 207, 0.25) !important;
+        border-radius: 10px !important;
+        padding: 0.35rem 0.5rem !important;
+    }
+    /* Force all app/TCP text to neutral (non-pink). */
+    .kk-title,
+    .kk-subtitle,
+    .tcp-title,
+    .tcp-status-text,
+    .tcp-updated-line,
+    .tcp-updated-line-refreshing,
+    .tcp-panel-label,
+    .tcp-bias-label,
+    .tcp-pb-label,
+    .tcp-vol-data,
+    .tcp-trend-direction,
+    .tcp-trend-level-badge,
+    .tcp-trend-pressure,
+    .tcp-control-label,
+    .tcp-session-status-text,
+    .tcp-alert-main-line,
+    .tcp-risk-pill,
+    .tcp-quick-subpanel-label,
+    .tcp-knob-panel-label,
+    .tcp-session-status-active,
+    .tcp-session-status-paused,
+    .tcp-session-status-completed,
+    .tcp-session-status-none,
+    .tcp-status-online,
+    .tcp-status-offline,
+    .tcp-bias-bullish,
+    .tcp-bias-bearish,
+    .tcp-bias-neutral,
+    .tcp-pb-label-invalid,
+    .tcp-pb-label-ready,
+    .tcp-pb-label-forming,
+    .tcp-pb-label-none {
+        color: #e8eaed !important;
+        text-shadow: none !important;
+    }
+    hr, .stDivider {
+        border-color: rgba(255, 159, 207, 0.35) !important;
     }
     </style>
     """,
@@ -1238,18 +1316,13 @@ def _visualize_auto_refresh_fragment(show_caption: bool = False) -> None:
 # ── Sidebar ───────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.title("📈 TradingKK")
-    st.caption("Trading session manager")
-    st.divider()
-
-    backend_ok = False
-    try:
-        api_client.health_check()
-        backend_ok = True
-        st.success("Backend connected")
-    except Exception:
-        st.error("Backend unreachable (localhost:8000)")
-
+    logo_col, title_col = st.columns([1, 4], vertical_alignment="center")
+    with logo_col:
+        if os.path.exists(APP_LOGO_PATH):
+            st.image(APP_LOGO_PATH, use_container_width=True)
+    with title_col:
+        st.markdown(f'<div class="kk-title">{APP_NAME}</div>', unsafe_allow_html=True)
+        st.markdown('<div class="kk-subtitle">Trading session manager</div>', unsafe_allow_html=True)
     st.divider()
     if "nav_page" not in st.session_state:
         st.session_state["nav_page"] = "Trading Control Panel"
