@@ -14,11 +14,12 @@ from datetime import datetime, timezone
 import time
 
 APP_NAME = "KK Trading"
-APP_LOGO_PATH = (
-    "/Users/konstantinoskonstantelos/.cursor/projects/"
-    "Users-konstantinoskonstantelos-Documents-tradingkk-frontend/assets/"
-    "tradingkklogo-c83aa2c4-0ef3-4856-b16d-8ec184c44ec7.png"
-)
+APP_ROOT = os.path.dirname(os.path.abspath(__file__))
+APP_LOGO_CANDIDATES = [
+    os.path.join(APP_ROOT, "tradinglogo.png"),
+    os.path.join(APP_ROOT, "tradingkklogo.png"),
+]
+APP_LOGO_PATH = next((p for p in APP_LOGO_CANDIDATES if os.path.exists(p)), None)
 
 TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h"]
 PROVIDERS = ["IBKR", "BYBIT"]
