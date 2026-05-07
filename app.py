@@ -1142,16 +1142,15 @@ def _system_clock_widget() -> None:
 
 
 @st.fragment(run_every="1s")
-def _tcp_auto_refresh_fragment() -> None:
+def _tcp_auto_refresh_fragment(current_session_id: int) -> None:
     auto_enabled = bool(st.session_state.get("tcp_auto_refresh_enabled", False))
+    session_id = int(current_session_id)
 
     cfg = st.session_state.get("tcp_auto_refresh_cfg")
     if isinstance(cfg, dict):
-        session_id = cfg.get("session_id", st.session_state.get("tcp_session_knob", 1))
         timeframe = cfg.get("timeframe", "1m")
         interval_seconds = int(cfg.get("interval_seconds", _refresh_seconds_for_timeframe(timeframe)))
     else:
-        session_id = st.session_state.get("tcp_session_knob", 1)
         timeframe = "1m"
         interval_seconds = _refresh_seconds_for_timeframe(timeframe)
 
@@ -5221,7 +5220,7 @@ def trading_control_panel_page():
             st.rerun()
 
     with status_col:
-        _tcp_auto_refresh_fragment()
+        _tcp_auto_refresh_fragment(int(session_id_tcp))
     force_refresh = bool(st.session_state.pop("tcp_force_refresh", False))
     need_fetch = force_refresh or knob_changed or (not panel_data) or (panel_session_id != int(session_id_tcp))
     if need_fetch:
