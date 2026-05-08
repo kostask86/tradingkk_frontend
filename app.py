@@ -22,7 +22,7 @@ APP_LOGO_CANDIDATES = [
 APP_LOGO_PATH = next((p for p in APP_LOGO_CANDIDATES if os.path.exists(p)), None)
 
 TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h"]
-PROVIDERS = ["IBKR", "BYBIT"]
+PROVIDERS = ["IBKR", "BYBIT", "IG"]
 ALERT_STATUSES = ["OPEN", "TP_HIT", "SL_HIT", "CANCELED"]
 ALERT_DIRECTIONS = ["LONG", "SHORT"]
 ALERT_TYPES = ["PREALERT", "TRIGGER_ALERT", "TREND_STRENGTH_ALERT", "BREAKOUT"]
@@ -1775,7 +1775,7 @@ def sessions_page():
                 with viz_cols[0]:
                     viz_session_id = st.number_input("Session ID", min_value=1, value=1, step=1, key="viz_session_id")
                 with viz_cols[1]:
-                    viz_num_bars = st.number_input("Num Bars", min_value=20, max_value=1000, value=70, step=20, key="viz_num_bars")
+                    viz_num_bars = st.number_input("Num Bars", min_value=20, max_value=1000, value=40, step=20, key="viz_num_bars")
 
                 if st.form_submit_button("Run Visualize", use_container_width=True):
                     try:
