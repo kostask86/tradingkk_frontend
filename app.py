@@ -1176,9 +1176,9 @@ def _tcp_auto_refresh_fragment(current_session_id: int) -> None:
         panel_result = api_client.get_trading_control_panel(int(session_id))
         st.session_state["tcp_panel_result"] = panel_result
         # The small chart on the TCP page uses `tcp_viz_result`, so refresh it too.
-        # Keep bar count aligned with the TCP chart (50 bars).
+        # Keep bar count aligned with the TCP chart (40 bars).
         try:
-            viz_result = api_client.visualize_session(int(session_id), 50)
+            viz_result = api_client.visualize_session(int(session_id), 40)
             if isinstance(viz_result, dict):
                 st.session_state["tcp_viz_result"] = viz_result
                 st.session_state.pop("tcp_viz_error", None)
@@ -1833,7 +1833,7 @@ def sessions_page():
                         last_bar = chart_df.iloc[-1]
                         last_close = pd.to_numeric(last_bar.get("close"), errors="coerce")
                         last_close_display = (
-                            f"{float(last_close):,.2f}" if pd.notna(last_close) else "—"
+                            f"{float(last_close):,.4f}" if pd.notna(last_close) else "—"
                         )
                         last_bar_time_raw = None
                         if isinstance(bars, list) and bars:
@@ -3229,7 +3229,7 @@ def sessions_page():
 
 # ── Provider page ─────────────────────────────────────────────────────
 
-SEC_TYPES = ["STK", "FOREX", "SPOT"]
+SEC_TYPES = ["STK", "FOREX", "SPOT", "CMDTY"]
 PROVIDER_POSITION_CATEGORIES = ["linear", "inverse", "option"]
 
 def provider_page():
@@ -5262,7 +5262,7 @@ def trading_control_panel_page():
 
     panel_data = st.session_state.get("tcp_panel_result")
 
-    # Minimal trend chart data for TCP (50 bars + up to 4 latest swing points).
+    # Minimal trend chart data for TCP (40 bars + up to 4 latest swing points).
     tcp_viz_data = st.session_state.get("tcp_viz_result")
     tcp_viz_session_id = None
     if isinstance(tcp_viz_data, dict):
@@ -5277,7 +5277,7 @@ def trading_control_panel_page():
     )
     if need_viz_fetch:
         try:
-            viz = api_client.visualize_session(int(session_id_tcp), 50)
+            viz = api_client.visualize_session(int(session_id_tcp), 40)
             if isinstance(viz, dict):
                 st.session_state["tcp_viz_result"] = viz
                 st.session_state.pop("tcp_viz_error", None)
