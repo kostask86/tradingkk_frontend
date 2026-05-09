@@ -3229,7 +3229,7 @@ def sessions_page():
 
 # ── Provider page ─────────────────────────────────────────────────────
 
-SEC_TYPES = ["STK", "FOREX", "SPOT", "CMDTY"]
+SEC_TYPES = ["STK", "FOREX", "SPOT", "CMDTY", "IND"]
 PROVIDER_POSITION_CATEGORIES = ["linear", "inverse", "option"]
 
 def provider_page():
