@@ -5085,14 +5085,14 @@ def _show_alert_evaluation_dialog(default_master_sid: int) -> None:
 
 
 def trading_control_panel_page():
-    # Session picker (radio 1–5) stays in sync with `tcp_session_knob` for auto-refresh and API calls.
+    # Session picker (radio 1–6) stays in sync with `tcp_session_knob` for auto-refresh and API calls.
     if "tcp_session_knob" not in st.session_state:
         st.session_state["tcp_session_knob"] = 1
     try:
         _k = int(st.session_state["tcp_session_knob"])
     except (TypeError, ValueError):
         _k = 1
-    st.session_state["tcp_session_knob"] = max(1, min(5, _k))
+    st.session_state["tcp_session_knob"] = max(1, min(6, _k))
     st.session_state.pop("tcp_sess_knob_widget", None)
 
     if "tcp_session_id_radio" not in st.session_state:
@@ -5101,7 +5101,7 @@ def trading_control_panel_page():
         _radio_sel = int(st.session_state["tcp_session_id_radio"])
     except (TypeError, ValueError):
         _radio_sel = int(st.session_state["tcp_session_knob"])
-    session_id_tcp = max(1, min(5, _radio_sel))
+    session_id_tcp = max(1, min(6, _radio_sel))
     if session_id_tcp != _radio_sel:
         st.session_state["tcp_session_id_radio"] = session_id_tcp
     st.session_state["tcp_session_knob"] = session_id_tcp
@@ -5721,7 +5721,7 @@ def trading_control_panel_page():
                     with st.container(horizontal=True, horizontal_alignment="center", gap=None):
                         st.radio(
                             "Session ID",
-                            options=[1, 2, 3, 4, 5],
+                            options=[1, 2, 3, 4, 5, 6],
                             horizontal=True,
                             key="tcp_session_id_radio",
                             label_visibility="collapsed",
