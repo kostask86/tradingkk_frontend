@@ -5337,19 +5337,37 @@ def trading_control_panel_page():
             import altair as alt
 
             bars_df = pd.DataFrame([{"bar_index": idx, **bar} for idx, bar in enumerate(bars)])
-            if "close" in bars_df.columns:
-                bars_df["close"] = pd.to_numeric(bars_df["close"], errors="coerce")
+            for col in ["open", "high", "low", "close"]:
+                if col in bars_df.columns:
+                    bars_df[col] = pd.to_numeric(bars_df[col], errors="coerce")
             bars_df["date"] = pd.to_datetime(bars_df.get("date"), errors="coerce", utc=True)
-            chart_df = bars_df.dropna(subset=["date", "close"]).copy()
+            chart_df = bars_df.dropna(subset=["date", "open", "high", "low", "close"]).copy()
 
             if chart_df.empty:
-                st.caption("No chart bars available.")
+                st.caption("No OHLC chart bars available.")
             else:
-                base = alt.Chart(chart_df).encode(
-                    x=alt.X("date:T", title="Time (UTC)", scale=alt.Scale(type="utc")),
-                    y=alt.Y("close:Q", title="Price", scale=alt.Scale(zero=False)),
+                chart_df["candle_low"] = chart_df[["open", "close"]].min(axis=1)
+                chart_df["candle_high"] = chart_df[["open", "close"]].max(axis=1)
+                chart_df["candle_color"] = chart_df.apply(
+                    lambda r: "#22c55e" if r["close"] >= r["open"] else "#ef4444", axis=1
                 )
-                line = base.mark_line(color="#5aa0ff", strokeWidth=1.8)
+
+                price_scale = alt.Scale(zero=False)
+                x_scale_utc = alt.Scale(type="utc")
+
+                wick = alt.Chart(chart_df).mark_rule().encode(
+                    x=alt.X("date:T", title="Time (UTC)", scale=x_scale_utc),
+                    y=alt.Y("low:Q", title="Price", scale=price_scale),
+                    y2="high:Q",
+                    color=alt.value("#9aa0a6"),
+                )
+                candle = alt.Chart(chart_df).mark_bar(size=7).encode(
+                    x=alt.X("date:T", scale=x_scale_utc),
+                    y=alt.Y("candle_low:Q", scale=price_scale),
+                    y2="candle_high:Q",
+                    color=alt.Color("candle_color:N", scale=None, legend=None),
+                )
+                chart = wick + candle
 
                 swings = []
                 for key in ["previous_high_swing", "latest_high_swing", "previous_low_swing", "latest_low_swing"]:
@@ -5357,7 +5375,6 @@ def trading_control_panel_page():
                     if isinstance(sp, dict):
                         swings.append(sp)
 
-                marker_layer = None
                 if swings:
                     swings_df = pd.DataFrame(swings)
                     if {"bar_index", "price", "type"}.issubset(swings_df.columns):
@@ -5368,20 +5385,25 @@ def trading_control_panel_page():
                         marker_df = swings_df.merge(chart_df[["bar_index", "date"]], on="bar_index", how="left")
                         marker_df = marker_df.dropna(subset=["date", "price"])
                         if not marker_df.empty:
-                            marker_layer = alt.Chart(marker_df).mark_point(
-                                filled=True, size=90, strokeWidth=1.2, stroke="black"
+                            markers = alt.Chart(marker_df).mark_point(
+                                filled=True, size=85, strokeWidth=1.4, stroke="#0d0f12"
                             ).encode(
-                                x=alt.X("date:T", scale=alt.Scale(type="utc")),
-                                y=alt.Y("price:Q", scale=alt.Scale(zero=False)),
+                                x=alt.X("date:T", scale=x_scale_utc),
+                                y=alt.Y("price:Q", scale=price_scale),
                                 color=alt.Color(
                                     "type:N",
                                     scale=alt.Scale(domain=["HIGH", "LOW"], range=["#22c55e", "#ef4444"]),
                                     legend=None,
                                 ),
+                                shape=alt.Shape(
+                                    "type:N",
+                                    scale=alt.Scale(domain=["HIGH", "LOW"], range=["triangle-up", "triangle-down"]),
+                                    legend=None,
+                                ),
                             )
+                            chart = chart + markers
 
-                chart = line if marker_layer is None else (line + marker_layer)
-                st.altair_chart(chart.properties(height=170), use_container_width=True)
+                st.altair_chart(chart.properties(height=340), use_container_width=True)
         else:
             st.caption("No chart bars available.")
 
