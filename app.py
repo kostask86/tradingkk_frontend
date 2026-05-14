@@ -909,6 +909,15 @@ st.markdown(
         border-radius: 3px;
         outline: none;
     }
+    .tcp-multi-card-header {
+        font-size: 0.7rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        color: #9ec3d6;
+        text-align: center;
+        margin-bottom: 0.4rem;
+        text-transform: uppercase;
+    }
     /* Make selected sidebar nav button subtle (avoid bright red primary). */
     div[data-testid="stSidebar"] .stButton > button[kind="primary"] {
         background: linear-gradient(180deg, #1b1b1b 0%, #101010 100%) !important;
@@ -5084,7 +5093,363 @@ def _show_alert_evaluation_dialog(default_master_sid: int) -> None:
         st.json(_prev)
 
 
+def _tcp_bias_dial_html(panel_data: dict | None) -> str:
+    """Render the TCP State Bias semicircular dial. Shared by single + multi views."""
+    state_bias = str((panel_data or {}).get("state_bias") or "NEUTRAL").upper()
+    if state_bias not in ("BULLISH", "BEARISH", "NEUTRAL"):
+        state_bias = "NEUTRAL"
+    arrow_class = f"tcp-bias-arrow-{state_bias.lower()}"
+    label_class = f"tcp-bias-{state_bias.lower()}"
+    return (
+        '<div class="tcp-bias-gauge-wrap">'
+        '<div class="tcp-bias-gauge">'
+        '<div class="tcp-bias-gauge-inner"></div>'
+        f'<div class="tcp-bias-arrow {arrow_class}"></div>'
+        '</div>'
+        '</div>'
+        f'<div class="tcp-bias-label {label_class}">{state_bias}</div>'
+    )
+
+
+def _tcp_trend_panel_html(panel_data: dict | None) -> str:
+    """Render the TCP Trend mini-panel. Shared by single + multi views."""
+    panel = panel_data or {}
+    trend_strength = panel.get("trend_strenght") or {}
+    if not isinstance(trend_strength, dict):
+        trend_strength = {}
+    trend_level = str(trend_strength.get("level", "WEAK")).upper()
+    trend_direction = str(trend_strength.get("direction", "NEUTRAL")).upper()
+    if trend_level not in ("WEAK", "VALID", "STRONG"):
+        trend_level = "WEAK"
+    if trend_direction not in ("BULLISH", "BEARISH", "NEUTRAL"):
+        trend_direction = "NEUTRAL"
+    trend_dir_class = f"tcp-trend-direction-{trend_direction.lower()}"
+    trend_bar_active_class = f"tcp-trend-bar-active-{trend_direction.lower()}"
+    level_count = 1 if trend_level == "WEAK" else 2 if trend_level == "VALID" else 3
+    bar_1 = trend_bar_active_class if level_count >= 1 else ""
+    bar_2 = trend_bar_active_class if level_count >= 2 else ""
+    bar_3 = trend_bar_active_class if level_count >= 3 else ""
+
+    latest_bias = panel.get("latest_bias_calculation") or {}
+    if not isinstance(latest_bias, dict):
+        latest_bias = {}
+    pressure_display = _fmt_score_0_100(latest_bias.get("trend_pressure_score"))
+    pressure_line = (
+        f"TREND PRESSURE: {html.escape(pressure_display)} / 100"
+        if pressure_display != "—"
+        else "TREND PRESSURE: —"
+    )
+    return (
+        '<div class="tcp-trend-wrap">'
+        f'<div class="tcp-trend-direction {trend_dir_class}">{trend_direction}</div>'
+        f'<div class="tcp-trend-level-badge">{trend_level}</div>'
+        f'<div class="tcp-trend-pressure">{pressure_line}</div>'
+        '<div class="tcp-trend-bars">'
+        f'<span class="tcp-trend-bar {bar_1}"></span>'
+        f'<span class="tcp-trend-bar {bar_2}"></span>'
+        f'<span class="tcp-trend-bar {bar_3}"></span>'
+        '</div>'
+        '</div>'
+    )
+
+
+def _on_tcp_multi_pills_change() -> None:
+    """Mirror pill widget state into the user-managed storage key.
+
+    Runs before the script reruns, so downstream reads see the new selection
+    on the same run. Without this, the storage key would lag one rerun behind
+    the widget.
+    """
+    val = st.session_state.get("tcp_multi_pills_widget", [])
+    cleaned: list[int] = []
+    for sid in val or []:
+        try:
+            v = int(sid)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= v <= 6 and v not in cleaned:
+            cleaned.append(v)
+    cleaned.sort()
+    st.session_state["tcp_multi_selected_sessions"] = cleaned
+
+
+def _on_tcp_multi_auto_refresh_change() -> None:
+    """Mirror auto-refresh toggle widget state into the user-managed storage key."""
+    st.session_state["tcp_multi_auto_refresh_enabled"] = bool(
+        st.session_state.get("tcp_multi_auto_refresh_toggle", False)
+    )
+
+
+def _multi_fetch(selected: list[int]) -> None:
+    """Fetch get_session + get_trading_control_panel for each selected session id.
+
+    Stores per-session payloads and per-session error messages in session state so
+    healthy cards keep rendering even when a single session fails.
+    """
+    panels: dict[int, dict] = {}
+    details: dict[int, dict] = {}
+    errs: dict[int, str] = {}
+    for sid in selected:
+        try:
+            sid_int = int(sid)
+        except (TypeError, ValueError):
+            continue
+        try:
+            detail = api_client.get_session(sid_int)
+            details[sid_int] = detail if isinstance(detail, dict) else {}
+            panel = api_client.get_trading_control_panel(sid_int)
+            panels[sid_int] = panel if isinstance(panel, dict) else {}
+        except APIError as e:
+            errs[sid_int] = str(getattr(e, "detail", e))
+        except Exception as e:
+            errs[sid_int] = str(e)
+    st.session_state["tcp_multi_panel_results"] = panels
+    st.session_state["tcp_multi_session_details"] = details
+    st.session_state["tcp_multi_errors"] = errs
+    st.session_state["tcp_multi_last_fetch_ts"] = time.time()
+
+
+@st.fragment(run_every="1s")
+def _tcp_multi_auto_refresh_fragment() -> None:
+    selected_raw = st.session_state.get("tcp_multi_selected_sessions") or []
+    selected: list[int] = []
+    for sid in selected_raw:
+        try:
+            selected.append(int(sid))
+        except (TypeError, ValueError):
+            continue
+    try:
+        interval = int(st.session_state.get("tcp_multi_interval_seconds", 10))
+    except (TypeError, ValueError):
+        interval = 10
+    interval = max(2, min(60, interval))
+    last = float(st.session_state.get("tcp_multi_last_fetch_ts", 0.0))
+    elapsed = max(0.0, time.time() - last)
+    remaining = max(0, int(interval - elapsed))
+    auto_on = bool(st.session_state.get("tcp_multi_auto_refresh_enabled", False))
+    sessions_label = ", ".join(str(s) for s in selected) if selected else "—"
+
+    if not auto_on:
+        st.caption(f"Auto-refresh OFF | Sessions: {sessions_label}")
+        return
+
+    st.caption(
+        f"Auto-refresh ON | Sessions: {sessions_label} | "
+        f"Every {interval}s | Next in {remaining}s"
+    )
+    if not selected or elapsed < interval:
+        return
+    _multi_fetch(selected)
+    st.rerun()
+
+
+def trading_control_panel_multi_page():
+    """Multi-session TCP view: State Bias dial + Trend mini-panel per selected session."""
+    if "tcp_multi_selected_sessions" not in st.session_state:
+        st.session_state["tcp_multi_selected_sessions"] = [1]
+    if "tcp_multi_auto_refresh_enabled" not in st.session_state:
+        st.session_state["tcp_multi_auto_refresh_enabled"] = False
+    if "tcp_multi_interval_seconds" not in st.session_state:
+        st.session_state["tcp_multi_interval_seconds"] = 60
+    if "tcp_multi_panel_results" not in st.session_state:
+        st.session_state["tcp_multi_panel_results"] = {}
+    if "tcp_multi_session_details" not in st.session_state:
+        st.session_state["tcp_multi_session_details"] = {}
+    if "tcp_multi_errors" not in st.session_state:
+        st.session_state["tcp_multi_errors"] = {}
+    if "tcp_multi_last_fetch_ts" not in st.session_state:
+        st.session_state["tcp_multi_last_fetch_ts"] = 0.0
+
+    backend_ok = False
+    try:
+        api_client.health_check()
+        backend_ok = True
+    except Exception:
+        pass
+
+    selected_raw = st.session_state.get("tcp_multi_selected_sessions") or []
+    selected_sessions: list[int] = []
+    for sid in selected_raw:
+        try:
+            v = int(sid)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= v <= 6 and v not in selected_sessions:
+            selected_sessions.append(v)
+    selected_sessions.sort()
+    n_selected = len(selected_sessions)
+
+    last_fetch_ts = float(st.session_state.get("tcp_multi_last_fetch_ts", 0.0))
+    last_fetch_label = "Updated · waiting for first fetch"
+    if last_fetch_ts > 0:
+        fetched_at = datetime.fromtimestamp(last_fetch_ts, tz=timezone.utc).strftime("%H:%M:%S UTC")
+        seconds_ago = int(max(0.0, time.time() - last_fetch_ts))
+        last_fetch_label = f"Updated · {fetched_at} ({seconds_ago}s ago)"
+
+    force_refresh_pending = bool(st.session_state.get("tcp_multi_force_refresh", False))
+    prev_selection = st.session_state.get("tcp_multi_last_selection")
+    selection_changed = prev_selection != selected_sessions
+    need_fetch = (
+        force_refresh_pending
+        or selection_changed
+        or (last_fetch_ts == 0.0 and bool(selected_sessions))
+    )
+
+    led_class = "tcp-led-online" if backend_ok else "tcp-led-offline"
+    led_pulse_class = "tcp-led-pulse" if need_fetch else ""
+    status_class = "tcp-status-online" if backend_ok else "tcp-status-offline"
+    status_text = "SYSTEM ONLINE" if backend_ok else "SYSTEM OFFLINE"
+    freshness_class = "tcp-updated-line tcp-updated-line-refreshing" if need_fetch else "tcp-updated-line"
+    freshness_text = "Refreshing data..." if need_fetch else last_fetch_label
+
+    st.markdown(
+        f"""
+        <div class="tcp-top-bar">
+            <div style="width: 140px;"></div>
+            <div class="tcp-title">TRADING CONTROL PANEL</div>
+            <div class="tcp-status">
+                <div class="tcp-status-stack">
+                    <span class="tcp-status-main">
+                        <span class="tcp-led {led_class} {led_pulse_class}"></span>
+                        <span class="tcp-status-text {status_class}">{status_text}</span>
+                    </span>
+                    <span class="{freshness_class}">{html.escape(freshness_text)}</span>
+                    <span style="font-size:0.68rem;color:#9ec3d6;letter-spacing:0.03em;">
+                        MULTI-SESSION VIEW · Sessions: {n_selected}
+                    </span>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    back_col, status_col, refresh_col = st.columns([1, 19, 1])
+    with back_col:
+        if st.button("←", key="tcp_multi_back_btn", help="Back to single-session view"):
+            st.session_state["tcp_mode"] = "single"
+            st.rerun()
+    with refresh_col:
+        if st.button("↻", key="tcp_multi_refresh_now_btn", help="Refresh all selected sessions now"):
+            st.session_state["tcp_multi_force_refresh"] = True
+            st.rerun()
+    with status_col:
+        _tcp_multi_auto_refresh_fragment()
+
+    if force_refresh_pending or selection_changed or need_fetch:
+        st.session_state.pop("tcp_multi_force_refresh", None)
+        st.session_state["tcp_multi_last_selection"] = list(selected_sessions)
+        if selected_sessions:
+            _multi_fetch(selected_sessions)
+
+    with st.container(border=True):
+        st.markdown("##### Session Selection")
+        pills_fn = getattr(st, "pills", None)
+        # Pattern: separate widget key + user-managed storage key so the selection
+        # survives page navigation (Streamlit GCs widget-managed state when the
+        # widget isn't rendered on a script run).
+        if callable(pills_fn):
+            pills_fn(
+                "Sessions",
+                options=[1, 2, 3, 4, 5, 6],
+                selection_mode="multi",
+                key="tcp_multi_pills_widget",
+                default=list(selected_sessions),
+                on_change=_on_tcp_multi_pills_change,
+                label_visibility="collapsed",
+            )
+        else:
+            cb_cols = st.columns(6)
+            current = set(selected_sessions)
+            new_selection: list[int] = []
+            for idx, sid in enumerate([1, 2, 3, 4, 5, 6]):
+                with cb_cols[idx]:
+                    checked = st.checkbox(
+                        f"#{sid}",
+                        value=sid in current,
+                        key=f"tcp_multi_cb_{sid}",
+                    )
+                    if checked:
+                        new_selection.append(sid)
+            st.session_state["tcp_multi_selected_sessions"] = new_selection
+
+        st.toggle(
+            "Auto Refresh",
+            value=bool(st.session_state.get("tcp_multi_auto_refresh_enabled", False)),
+            key="tcp_multi_auto_refresh_toggle",
+            on_change=_on_tcp_multi_auto_refresh_change,
+            help="Periodically re-fetch the selected sessions (every 60s)",
+        )
+
+    with st.container(border=True):
+        st.markdown("##### Multi Session Outlook")
+
+        panels_map: dict[int, dict] = st.session_state.get("tcp_multi_panel_results", {}) or {}
+        details_map: dict[int, dict] = st.session_state.get("tcp_multi_session_details", {}) or {}
+        errors_map: dict[int, str] = st.session_state.get("tcp_multi_errors", {}) or {}
+
+        if not selected_sessions:
+            st.caption("Select one or more sessions above to view their State Bias and Trend.")
+        else:
+            for row_start in range(0, len(selected_sessions), 2):
+                row_ids = selected_sessions[row_start:row_start + 2]
+                row_cols = st.columns(2)
+                for col_idx, sid in enumerate(row_ids):
+                    with row_cols[col_idx]:
+                        with st.container(border=True):
+                            detail = details_map.get(sid, {}) or {}
+                            symbol = (
+                                detail.get("symbol")
+                                or detail.get("instrument")
+                                or detail.get("instrument_name")
+                                or detail.get("ticker")
+                                or "—"
+                            )
+                            timeframe = (
+                                detail.get("timeframe")
+                                or detail.get("tf")
+                                or "—"
+                            )
+                            st.markdown(
+                                f"<div class='tcp-multi-card-header'>"
+                                f"#{sid} · {html.escape(str(symbol))} · {html.escape(str(timeframe))}"
+                                f"</div>",
+                                unsafe_allow_html=True,
+                            )
+                            err = errors_map.get(sid)
+                            if err:
+                                st.warning(f"Session #{sid}: {err}")
+                                continue
+                            panel = panels_map.get(sid)
+                            if not panel:
+                                st.caption("Loading…")
+                                continue
+                            bias_col, trend_col = st.columns(2)
+                            with bias_col:
+                                st.markdown(
+                                    '<div class="tcp-panel">'
+                                    '<div class="tcp-panel-label">STATE BIAS</div>'
+                                    + _tcp_bias_dial_html(panel)
+                                    + '</div>',
+                                    unsafe_allow_html=True,
+                                )
+                            with trend_col:
+                                st.markdown(
+                                    '<div class="tcp-panel">'
+                                    '<div class="tcp-panel-label">TREND</div>'
+                                    + _tcp_trend_panel_html(panel)
+                                    + '</div>',
+                                    unsafe_allow_html=True,
+                                )
+
+
 def trading_control_panel_page():
+    if "tcp_mode" not in st.session_state:
+        st.session_state["tcp_mode"] = "single"
+    if st.session_state.get("tcp_mode") == "multi":
+        trading_control_panel_multi_page()
+        return
+
     # Session picker (radio 1–6) stays in sync with `tcp_session_knob` for auto-refresh and API calls.
     if "tcp_session_knob" not in st.session_state:
         st.session_state["tcp_session_knob"] = 1
@@ -5213,10 +5578,14 @@ def trading_control_panel_page():
         unsafe_allow_html=True,
     )
 
-    status_col, refresh_col = st.columns([20, 1])
+    status_col, refresh_col, multi_col = st.columns([19, 1, 1])
     with refresh_col:
         if st.button("↻", key="tcp_refresh_now_btn", help="Refresh all trading panels now"):
             st.session_state["tcp_force_refresh"] = True
+            st.rerun()
+    with multi_col:
+        if st.button("⊞", key="tcp_open_multi_btn", help="Open multi-session view"):
+            st.session_state["tcp_mode"] = "multi"
             st.rerun()
 
     with status_col:
@@ -5413,7 +5782,6 @@ def trading_control_panel_page():
     lv = (panel_data or {}).get("latest_volatility_calculation") or {}
     latest_alert = (panel_data or {}).get("latest_alert")
     latest_pb = (panel_data or {}).get("latest_pullback_calculation") or {}
-    trend_strength = (panel_data or {}).get("trend_strenght") or {}
     session_data_tcp = st.session_state.get("tcp_session_detail", {}) or {}
     alert_freeze_raw = session_data_tcp.get("alert_freeze")
     if alert_freeze_raw is None:
@@ -5536,29 +5904,6 @@ def trading_control_panel_page():
         "AVOID": "#ef4444",
     }
     swq_color = swq_color_map.get(swq, "#9aa0a6")
-    trend_level = str(trend_strength.get("level", "WEAK")).upper()
-    trend_direction = str(trend_strength.get("direction", "NEUTRAL")).upper()
-    if trend_level not in ("WEAK", "VALID", "STRONG"):
-        trend_level = "WEAK"
-    if trend_direction not in ("BULLISH", "BEARISH", "NEUTRAL"):
-        trend_direction = "NEUTRAL"
-    trend_dir_class = f"tcp-trend-direction-{trend_direction.lower()}"
-    trend_bar_active_class = f"tcp-trend-bar-active-{trend_direction.lower()}"
-    trend_level_count = 1 if trend_level == "WEAK" else 2 if trend_level == "VALID" else 3
-    trend_bar_1 = trend_bar_active_class if trend_level_count >= 1 else ""
-    trend_bar_2 = trend_bar_active_class if trend_level_count >= 2 else ""
-    trend_bar_3 = trend_bar_active_class if trend_level_count >= 3 else ""
-
-    latest_bias_tcp = (panel_data or {}).get("latest_bias_calculation") or {}
-    trend_pressure_display = _fmt_score_0_100(latest_bias_tcp.get("trend_pressure_score"))
-    trend_pressure_line = (
-        f"TREND PRESSURE: {html.escape(trend_pressure_display)} / 100"
-        if trend_pressure_display != "—"
-        else "TREND PRESSURE: —"
-    )
-
-    bias_arrow_class = f"tcp-bias-arrow-{state_bias.lower()}"
-    bias_label_class = f"tcp-bias-{state_bias.lower()}"
 
     low_active = " tcp-vol-light-active" if vol_status == "LOW" else ""
     norm_active = " tcp-vol-light-active" if vol_status == "NORMAL" else ""
@@ -5571,18 +5916,10 @@ def trading_control_panel_page():
 
         with col1:
             st.markdown(
-                f"""
-            <div class="tcp-panel">
-                <div class="tcp-panel-label">STATE BIAS</div>
-                <div class="tcp-bias-gauge-wrap">
-                    <div class="tcp-bias-gauge">
-                        <div class="tcp-bias-gauge-inner"></div>
-                        <div class="tcp-bias-arrow {bias_arrow_class}"></div>
-                    </div>
-                </div>
-                <div class="tcp-bias-label {bias_label_class}">{state_bias}</div>
-            </div>
-            """,
+                '<div class="tcp-panel">'
+                '<div class="tcp-panel-label">STATE BIAS</div>'
+                + _tcp_bias_dial_html(panel_data)
+                + '</div>',
                 unsafe_allow_html=True,
             )
             st.markdown(
@@ -5616,21 +5953,10 @@ def trading_control_panel_page():
                 unsafe_allow_html=True,
             )
             st.markdown(
-                f"""
-            <div class="tcp-panel">
-                <div class="tcp-panel-label">TREND</div>
-                <div class="tcp-trend-wrap">
-                    <div class="tcp-trend-direction {trend_dir_class}">{trend_direction}</div>
-                    <div class="tcp-trend-level-badge">{trend_level}</div>
-                    <div class="tcp-trend-pressure">{trend_pressure_line}</div>
-                    <div class="tcp-trend-bars">
-                        <span class="tcp-trend-bar {trend_bar_1}"></span>
-                        <span class="tcp-trend-bar {trend_bar_2}"></span>
-                        <span class="tcp-trend-bar {trend_bar_3}"></span>
-                    </div>
-                </div>
-            </div>
-            """,
+                '<div class="tcp-panel">'
+                '<div class="tcp-panel-label">TREND</div>'
+                + _tcp_trend_panel_html(panel_data)
+                + '</div>',
                 unsafe_allow_html=True,
             )
 
